@@ -46,7 +46,7 @@ const createRequest = async (req, res) => {
         await client.query('BEGIN');
         await client.query(
             `INSERT INTO production_receipts (receipt_no, warehouse_id, receipt_date, created_by, note, status)
-             VALUES ($1, $2, $3, $4, $5, 'PENDING')`,
+             VALUES ($1, $2, $3, $4, $5, 'pending')`,
             [receipt_no, warehouse_id, receipt_date, created_by, note]
         );
         const receipt = await db.getOne(`SELECT id FROM production_receipts WHERE receipt_no = $1 ORDER BY id DESC LIMIT 1`, [receipt_no]);
@@ -77,9 +77,9 @@ const factoryRespond = async (req, res) => {
 
         const receipt = await db.getOne(`SELECT status, note FROM production_receipts WHERE id = $1`, [receiptId]);
         if (!receipt) return res.status(404).json({ message: 'Khong tim thay phieu can xu ly.' });
-        if (receipt.status !== 'PENDING') return res.status(400).json({ message: `Phieu dang o trang thai ${receipt.status}, khong the duyet.` });
+        if (receipt.status !== 'pending') return res.status(400).json({ message: `Phieu dang o trang thai ${receipt.status}, khong the duyet.` });
 
-        const newStatus = action === 'accept' ? 'PROCESSING' : 'REJECTED';
+        const newStatus = action === 'accept' ? 'processing' : 'rejected';
         const finalNote = `[NM Phan hoi]: ${reason || 'Khong co ly do'} | Cu: ${receipt.note || ''}`;
         const respondentName = req.user?.full_name || req.user?.name || null;
 
@@ -120,7 +120,7 @@ const confirmReceipt = async (req, res) => {
                 [receipt.warehouse_id, item.product_id, item.quantity, receiptId]
             );
         }
-        await client.query(`UPDATE production_receipts SET status = 'COMPLETED', updated_at = CURRENT_TIMESTAMP WHERE id = $1`, [receiptId]);
+        await client.query(`UPDATE production_receipts SET status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = $1`, [receiptId]);
         await client.query('COMMIT');
         res.status(200).json({ message: 'Da nhan hang va cong ton kho!' });
     } catch (err) {

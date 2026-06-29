@@ -409,7 +409,7 @@ export default function ReportsPage() {
               <p style={{ margin: '6px 0 14px', color: '#64748b', fontSize: '14px' }}>So sánh các mặt hàng có giá trị tồn cao nhất trong dữ liệu đã lọc.</p>
               {chartData.length > 0 ? (
                 <div style={{ width: '100%', height: 320 }}>
-                  <ResponsiveContainer>
+                  <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 10 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                       <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 12 }} />
@@ -440,7 +440,7 @@ export default function ReportsPage() {
 
               <div style={{ width: '100%', height: 280, marginTop: '8px' }}>
                 {warehouseChartData.length > 0 ? (
-                  <ResponsiveContainer>
+                  <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie data={warehouseChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={74} outerRadius={108} paddingAngle={3} stroke="rgba(255,255,255,0.9)" strokeWidth={2}>
                         {warehouseChartData.map((entry, index) => (

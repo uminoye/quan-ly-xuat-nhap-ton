@@ -352,7 +352,7 @@ export default function WarehouseDashboardPage() {
               <>
                 <div style={{ display: 'grid', placeItems: 'center', padding: '6px 0 18px' }}>
                   <div style={{ width: '100%', height: 260, maxWidth: 340 }}>
-                    <ResponsiveContainer>
+                    <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie data={stats.warehouseDistribution} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={76} outerRadius={108} paddingAngle={2} stroke="#fff" strokeWidth={3}>
                           {stats.warehouseDistribution.map((entry, index) => (
