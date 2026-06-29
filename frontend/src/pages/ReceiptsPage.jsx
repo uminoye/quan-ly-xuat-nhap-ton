@@ -140,8 +140,9 @@ export default function ReceiptsPage() {
       setSelectedItems([]);
       setNote('');
       fetchData();
-    } catch {
-      alert('Lỗi tạo phiếu');
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'Lỗi không xác định';
+      alert('Lỗi tạo phiếu: ' + msg);
     }
   };
 

@@ -54,7 +54,7 @@ const createRequest = async (req, res) => {
              VALUES ($1, $2, $3, $4, $5, 'pending')`,
             [receipt_no.trim(), cleanWarehouseId, receipt_date, created_by, note || '']
         );
-        const receipt = await db.getOne(`SELECT id FROM production_receipts WHERE receipt_no = $1 ORDER BY id DESC LIMIT 1`, [receipt_no.trim()]);
+        const receipt = await db.getOne(`SELECT id FROM production_receipts WHERE receipt_no = $1 ORDER BY id DESC LIMIT 1`, [receipt_no.trim()], client);
         for (const item of items) {
             if (!item.product_id) continue;
             await client.query(

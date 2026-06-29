@@ -12,20 +12,20 @@ pool.on('error', (err) => {
   console.error('Unexpected database error:', err);
 });
 
-const query = (text, params) => pool.query(text, params);
+const query = (text, params, client) => (client || pool).query(text, params);
 
-const getOne = async (text, params) => {
-  const result = await pool.query(text, params);
+const getOne = async (text, params, client) => {
+  const result = await (client || pool).query(text, params);
   return result.rows[0] || null;
 };
 
-const getAll = async (text, params) => {
-  const result = await pool.query(text, params);
+const getAll = async (text, params, client) => {
+  const result = await (client || pool).query(text, params);
   return result.rows;
 };
 
-const run = async (text, params) => {
-  const result = await pool.query(text, params);
+const run = async (text, params, client) => {
+  const result = await (client || pool).query(text, params);
   return result;
 };
 
