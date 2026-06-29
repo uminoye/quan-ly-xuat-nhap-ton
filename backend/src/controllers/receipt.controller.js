@@ -41,26 +41,35 @@ const createRequest = async (req, res) => {
     try {
         const { receipt_no, warehouse_id, receipt_date, note, items } = req.body;
         const created_by = req.user?.id || 1;
+        if (!receipt_no || !receipt_no.trim()) return res.status(400).json({ message: 'Vui long nhap ma phieu!' });
+        if (!warehouse_id) return res.status(400).json({ message: 'Vui long chon kho nhap!' });
+        if (!receipt_date) return res.status(400).json({ message: 'Vui long chon ngay!' });
         if (!items || items.length === 0) return res.status(400).json({ message: 'Phai co san pham!' });
+        const cleanWarehouseId = Number(warehouse_id);
+        if (isNaN(cleanWarehouseId)) return res.status(400).json({ message: 'Kho khong hop le!' });
 
         await client.query('BEGIN');
         await client.query(
             `INSERT INTO production_receipts (receipt_no, warehouse_id, receipt_date, created_by, note, status)
              VALUES ($1, $2, $3, $4, $5, 'pending')`,
-            [receipt_no, warehouse_id, receipt_date, created_by, note]
+            [receipt_no.trim(), cleanWarehouseId, receipt_date, created_by, note || '']
         );
-        const receipt = await db.getOne(`SELECT id FROM production_receipts WHERE receipt_no = $1 ORDER BY id DESC LIMIT 1`, [receipt_no]);
+        const receipt = await db.getOne(`SELECT id FROM production_receipts WHERE receipt_no = $1 ORDER BY id DESC LIMIT 1`, [receipt_no.trim()]);
         for (const item of items) {
+            if (!item.product_id) continue;
             await client.query(
                 `INSERT INTO production_receipt_items (receipt_id, product_id, quantity) VALUES ($1, $2, $3)`,
-                [receipt.id, item.product_id, item.quantity]
+                [receipt.id, Number(item.product_id), Math.max(1, Number(item.quantity) || 1)]
             );
         }
         await client.query('COMMIT');
         res.status(201).json({ message: 'Da gui yeu cau cho Nha may!' });
     } catch (err) {
         await client.query('ROLLBACK');
-        res.status(400).json({ message: 'Loi tao phieu (Ma trung)', error: err.message });
+        console.error('Create receipt error:', err.message, 'Code:', err.code);
+        if (err.code === '23505') return res.status(400).json({ message: 'Ma phieu da ton tai, vui long dung ma khac!' });
+        if (err.code === '23503') return res.status(400).json({ message: 'Kho hoac san pham khong ton tai trong he thong!' });
+        res.status(400).json({ message: 'Loi tao phieu: ' + err.message });
     } finally {
         client.release();
     }
@@ -101,7 +110,7 @@ const confirmReceipt = async (req, res) => {
     try {
         const receiptId = req.params.id;
         const receipt = await db.getOne(`SELECT status, warehouse_id FROM production_receipts WHERE id = $1`, [receiptId]);
-        if (!receipt || receipt.status !== 'PROCESSING') {
+        if (!receipt || receipt.status !== 'processing') {
             return res.status(400).json({ message: 'Nha may chua giao hoac phieu da chot!' });
         }
         const items = await db.getAll(`SELECT product_id, quantity FROM production_receipt_items WHERE receipt_id = $1`, [receiptId]);
