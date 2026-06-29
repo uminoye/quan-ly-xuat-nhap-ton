@@ -26,6 +26,7 @@ const getAllProducts = async (req, res) => {
         const rows = await db.getAll(query);
         res.status(200).json(rows);
     } catch (err) {
+        console.error('[products GET] error:', err);
         res.status(500).json({ message: 'Loi Database', error: err.message });
     }
 };

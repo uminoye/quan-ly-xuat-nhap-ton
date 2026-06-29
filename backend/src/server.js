@@ -8,22 +8,30 @@ const app = express();
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:4173',
+  'https://quan-ly-xuat-nhap-ton.vercel.app',
   /\.vercel\.app$/,
-  /\.vercel\.app\/$/,
 ];
 
 app.use(cors({
   origin: function (origin, callback) {
+    if (origin) console.log('[CORS] origin:', origin);
     if (!origin || allowedOrigins.some(o => o instanceof RegExp ? o.test(origin) : o === origin)) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS: ' + origin));
+      console.log('[CORS] BLOCKED:', origin);
+      callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true,
 }));
 
 app.use(express.json());
+
+// --- REQUEST LOGGING ---
+app.use((req, _res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  next();
+});
 
 // --- ROUTES ---
 const authRoutes = require('./routes/auth.routes');
