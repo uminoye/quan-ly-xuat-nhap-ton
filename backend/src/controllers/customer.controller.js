@@ -17,15 +17,15 @@ const getAllCustomers = async (req, res) => {
 
 const createCustomer = async (req, res) => {
     try {
-        const { customer_code, company_name, phone, address, contact_person } = req.body;
+        const { company_name, phone, address, contact_person } = req.body;
         const created_by = req.userId;
-        const customer_code = await generateCode('customer');
+        const newCustomerCode = await generateCode('customer');
         const result = await db.run(
             `INSERT INTO customers (customer_code, company_name, phone, address, contact_person, created_by)
              VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-            [customer_code, company_name, phone, address, contact_person, created_by]
+            [newCustomerCode, company_name, phone, address, contact_person, created_by]
         );
-        res.status(201).json({ message: 'Tao khach hang thanh cong', id: result.rows[0].id, customer_code });
+        res.status(201).json({ message: 'Tao khach hang thanh cong', id: result.rows[0].id, customer_code: newCustomerCode });
     } catch (err) {
         if (err.message.includes('duplicate') || err.message.includes('unique')) {
             return res.status(400).json({ message: 'Loi tao khach hang (co the trung ma KH)' });
