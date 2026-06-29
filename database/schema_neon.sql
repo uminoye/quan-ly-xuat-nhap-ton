@@ -169,3 +169,14 @@ CREATE INDEX IF NOT EXISTS idx_inventory_transactions_type ON inventory_transact
 CREATE INDEX IF NOT EXISTS idx_sales_orders_status ON sales_orders(status);
 CREATE INDEX IF NOT EXISTS idx_sales_order_items_order ON sales_order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_delivery_requests_order ON delivery_requests(order_id);
+
+-- Bang danh sach ma tu dong
+CREATE TABLE IF NOT EXISTS auto_codes (
+    id SERIAL PRIMARY KEY,
+    code VARCHAR(50) UNIQUE NOT NULL,
+    prefix VARCHAR(20) NOT NULL,
+    year INTEGER NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_auto_codes_prefix_year ON auto_codes(prefix, year);
+CREATE INDEX IF NOT EXISTS idx_auto_codes_code ON auto_codes(code);

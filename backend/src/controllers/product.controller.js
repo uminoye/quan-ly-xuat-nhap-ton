@@ -1,4 +1,5 @@
 const db = require('../config/database');
+const generateCode = require('../utils/autoCode');
 
 const getAllProducts = async (req, res) => {
     try {
@@ -32,11 +33,11 @@ const getAllProducts = async (req, res) => {
 const createProduct = async (req, res) => {
     const client = await db.pool.connect();
     try {
-        const { sku, name, sale_price, unit, category, image_url, min_stock, warehouse_id, initial_stock } = req.body;
-        if (!sku || !name || !sale_price) {
-            return res.status(400).json({ message: 'Vui long nhap day du SKU, Ten va Gia' });
+        const { name, sale_price, unit, category, image_url, min_stock, warehouse_id, initial_stock } = req.body;
+        if (!name || !sale_price) {
+            return res.status(400).json({ message: 'Vui long nhap Ten va Gia' });
         }
-
+        const sku = await generateCode('product');
         const result = await client.query(
             `INSERT INTO products (sku, name, sale_price, unit, category, image_url, min_stock)
              VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
@@ -61,10 +62,10 @@ const createProduct = async (req, res) => {
                 );
             }
         }
-        res.status(201).json({ message: stockQty > 0 ? 'Them SP va luu Ton kho thanh cong!' : 'Them san pham thanh cong!' });
+        res.status(201).json({ message: stockQty > 0 ? 'Them SP va luu Ton kho thanh cong!' : 'Them san pham thanh cong!', sku });
     } catch (err) {
         if (err.message.includes('duplicate') || err.message.includes('unique')) {
-            return res.status(400).json({ message: `Ma SKU "${req.body.sku}" da ton tai!` });
+            return res.status(400).json({ message: `Ma SKU da ton tai! Vui long thu lai.` });
         }
         res.status(500).json({ message: 'Loi Database' });
     } finally {

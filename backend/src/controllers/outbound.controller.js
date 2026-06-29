@@ -1,4 +1,5 @@
 const db = require('../config/database');
+const generateCode = require('../utils/autoCode');
 
 const getAllOutbounds = async (req, res) => {
     try {
@@ -136,11 +137,11 @@ const createOutboundFromPending = async (req, res) => {
         }
 
         await client.query('BEGIN');
-        const outboundNo = `XK-${Date.now()}`;
+        const outbound_no = await generateCode('outbound');
         const result = await client.query(
             `INSERT INTO stock_outbound_notes (outbound_no, order_id, warehouse_id, export_date, created_by, note, status)
              VALUES ($1, $2, $3, $4, $5, $6, 'completed') RETURNING id`,
-            [outboundNo, order_id, warehouse_id, export_date || new Date().toISOString().split('T')[0], created_by, note || null]
+            [outbound_no, order_id, warehouse_id, export_date || new Date().toISOString().split('T')[0], created_by, note || null]
         );
         const outboundId = result.rows[0].id;
 
@@ -191,7 +192,7 @@ const respondOutbound = async (req, res) => {
 const createOutbound = async (req, res) => {
     const client = await db.pool.connect();
     try {
-        const { outbound_no, order_id, warehouse_id, export_date, note } = req.body;
+        const { order_id, warehouse_id, export_date, note } = req.body;
         const created_by = req.user?.id || 1;
         if (!order_id || !warehouse_id) return res.status(400).json({ message: 'Thieu thong tin don hang hoac kho xuat!' });
 
@@ -213,6 +214,7 @@ const createOutbound = async (req, res) => {
         }
 
         await client.query('BEGIN');
+        const outbound_no = await generateCode('outbound');
         const result = await client.query(
             `INSERT INTO stock_outbound_notes (outbound_no, order_id, warehouse_id, export_date, created_by, note, status)
              VALUES ($1, $2, $3, $4, $5, $6, 'completed') RETURNING id`,

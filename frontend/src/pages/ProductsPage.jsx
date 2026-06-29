@@ -101,7 +101,7 @@ export default function ProductsPage() {
   // --- MỞ FORM THÊM SẢN PHẨM ---
   const openAddModal = () => {
     setEditingId(null);
-    setNewSku(''); setNewName(''); setNewPrice(''); setNewUnit('cái');
+    setNewName(''); setNewPrice(''); setNewUnit('cái');
     setNewCategory(''); setNewImageUrl(''); setNewMinStock('50');
     setInitialStock(0); setTargetWarehouse('all');
     setIsModalOpen(true);
@@ -151,9 +151,9 @@ export default function ProductsPage() {
         });
         alert('Cập nhật thông tin & tồn kho thành công!');
       } else {
-        // CALL API THÊM MỚI
+        // CALL API THÊM MỚI (SKU tự sinh)
         await api.post('/products', { 
-          sku: newSku, name: newName, sale_price: newPrice, unit: newUnit,
+          name: newName, sale_price: newPrice, unit: newUnit,
           category: newCategory, image_url: newImageUrl, min_stock: newMinStock,
           initial_stock: initialStock, warehouse_id: targetWarehouse 
         });
@@ -469,8 +469,17 @@ export default function ProductsPage() {
             <form onSubmit={handleSubmitProduct}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
                 <div>
-                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '600', color: '#475569' }}>Mã SKU *</label>
-                  <input ref={skuInputRef} required placeholder="SP003" value={newSku} onChange={(e) => setNewSku(e.target.value.toUpperCase())} style={{ width: '100%', padding: '12px 14px', boxSizing: 'border-box', border: '1px solid #dbe3ea', borderRadius: '12px', background: '#fff', outline: 'none' }} />
+                  {editingId ? (
+                    <>
+                      <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '600', color: '#475569' }}>Mã SKU *</label>
+                      <input ref={skuInputRef} required placeholder="SP003" value={newSku} onChange={(e) => setNewSku(e.target.value.toUpperCase())} style={{ width: '100%', padding: '12px 14px', boxSizing: 'border-box', border: '1px solid #dbe3ea', borderRadius: '12px', background: '#fff', outline: 'none' }} />
+                    </>
+                  ) : (
+                    <>
+                      <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '600', color: '#475569' }}>Mã SKU</label>
+                      <div style={{ padding: '12px 14px', background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '12px', color: '#64748b', fontSize: '13px' }}>Tự động sinh khi lưu</div>
+                    </>
+                  )}
                 </div>
                 <div>
                   <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '600', color: '#475569' }}>Đơn vị *</label>

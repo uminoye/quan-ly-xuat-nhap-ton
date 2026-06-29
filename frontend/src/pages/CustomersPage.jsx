@@ -4,7 +4,6 @@ import 'remixicon/fonts/remixicon.css';
 import api from '../services/api';
 
 const initialFormData = {
-    customer_code: '',
     company_name: '',
     phone: '',
     address: '',
@@ -311,7 +310,7 @@ export default function CustomersPage() {
         e.preventDefault();
         setSubmitting(true);
         try {
-            await api.post('/customers', formData);
+            await api.post('/customers', { company_name: formData.company_name, phone: formData.phone, address: formData.address, contact_person: formData.contact_person });
             alert('Thêm khách hàng thành công!');
             closeForm();
             fetchCustomers();
@@ -395,7 +394,7 @@ export default function CustomersPage() {
                         <form onSubmit={handleSubmit} style={pageStyles.formGrid}>
                             <div style={pageStyles.field}>
                                 <label style={pageStyles.label}>Mã khách hàng</label>
-                                <input required name="customer_code" value={formData.customer_code} onChange={handleInputChange} placeholder="VD: KH003" style={pageStyles.input} />
+                                <div style={{ ...pageStyles.input, background: '#f0f9ff', border: '1px solid #bae6fd', color: '#64748b' }}>Tự động sinh khi lưu</div>
                             </div>
                             <div style={pageStyles.field}>
                                 <label style={pageStyles.label}>Tên công ty</label>

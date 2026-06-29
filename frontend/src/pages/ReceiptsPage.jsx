@@ -17,7 +17,6 @@ export default function ReceiptsPage() {
   const [hoveredStat, setHoveredStat] = useState(null);
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [receiptNo, setReceiptNo] = useState('');
   const [warehouseId, setWarehouseId] = useState('');
   const [receiptDate, setReceiptDate] = useState(new Date().toISOString().split('T')[0]);
   const [note, setNote] = useState('');
@@ -133,10 +132,9 @@ export default function ReceiptsPage() {
     e.preventDefault();
     if (selectedItems.length === 0) return alert('Chưa chọn sản phẩm!');
     try {
-      await api.post('/receipts', { receipt_no: receiptNo, warehouse_id: warehouseId, receipt_date: receiptDate, note, items: selectedItems });
-      alert('Đã gửi yêu cầu nhập hàng!');
+      const res = await api.post('/receipts', { warehouse_id: warehouseId, receipt_date: receiptDate, note, items: selectedItems });
+      alert(`Đã gửi yêu cầu nhập hàng! Mã phiếu: ${res.data.receipt_no}`);
       setIsCreateOpen(false);
-      setReceiptNo('');
       setSelectedItems([]);
       setNote('');
       fetchData();
@@ -580,7 +578,6 @@ export default function ReceiptsPage() {
 
             <form onSubmit={handleCreateRequest} style={{ padding: '22px 24px 24px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '14px', marginBottom: '14px' }}>
-                <input required placeholder="Mã phiếu (VD: YC-01)" value={receiptNo} onChange={(e) => setReceiptNo(e.target.value)} style={{ padding: '12px 14px', border: '1px solid #dbe3ee', borderRadius: '14px', outline: 'none' }} />
                 <select required value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} style={{ padding: '12px 14px', border: '1px solid #dbe3ee', borderRadius: '14px', outline: 'none' }}>
                   <option value="">-- Chọn kho muốn nhập --</option>
                   {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}

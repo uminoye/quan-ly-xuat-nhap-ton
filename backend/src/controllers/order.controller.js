@@ -1,4 +1,5 @@
 const db = require('../config/database');
+const generateCode = require('../utils/autoCode');
 
 const getAllOrders = async (req, res) => {
     try {
@@ -79,8 +80,13 @@ const getOrderItems = async (req, res) => {
 const createOrder = async (req, res) => {
     const client = await db.pool.connect();
     try {
-        const { order_no, customer_id, order_date, expected_delivery_date, note, items } = req.body;
+        const { customer_id, order_date, expected_delivery_date, note, items } = req.body;
+        if (!customer_id) return res.status(400).json({ message: 'Vui long chon khach hang!' });
+        if (!order_date) return res.status(400).json({ message: 'Vui long chon ngay!' });
+        if (!items || items.length === 0) return res.status(400).json({ message: 'Phai co san pham!' });
+
         await client.query('BEGIN');
+        const order_no = await generateCode('order');
         const result = await client.query(
             `INSERT INTO sales_orders (order_no, customer_id, order_date, expected_delivery_date, note, status)
              VALUES ($1, $2, $3, $4, $5, 'pending') RETURNING id`,
@@ -94,7 +100,7 @@ const createOrder = async (req, res) => {
             );
         }
         await client.query('COMMIT');
-        res.status(201).json({ message: 'Tao don hang thanh cong', id: orderId });
+        res.status(201).json({ message: 'Tao don hang thanh cong', id: orderId, order_no });
     } catch (err) {
         await client.query('ROLLBACK');
         res.status(500).json({ message: 'Loi Database: ' + err.message });

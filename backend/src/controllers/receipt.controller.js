@@ -36,12 +36,13 @@ const getAllReceipts = async (req, res) => {
     }
 };
 
+const generateCode = require('../utils/autoCode');
+
 const createRequest = async (req, res) => {
     const client = await db.pool.connect();
     try {
-        const { receipt_no, warehouse_id, receipt_date, note, items } = req.body;
+        const { warehouse_id, receipt_date, note, items } = req.body;
         const created_by = req.user?.id || 1;
-        if (!receipt_no || !receipt_no.trim()) return res.status(400).json({ message: 'Vui long nhap ma phieu!' });
         if (!warehouse_id) return res.status(400).json({ message: 'Vui long chon kho nhap!' });
         if (!receipt_date) return res.status(400).json({ message: 'Vui long chon ngay!' });
         if (!items || items.length === 0) return res.status(400).json({ message: 'Phai co san pham!' });
@@ -49,12 +50,13 @@ const createRequest = async (req, res) => {
         if (isNaN(cleanWarehouseId)) return res.status(400).json({ message: 'Kho khong hop le!' });
 
         await client.query('BEGIN');
+        const receipt_no = await generateCode('receipt');
         await client.query(
             `INSERT INTO production_receipts (receipt_no, warehouse_id, receipt_date, created_by, note, status)
              VALUES ($1, $2, $3, $4, $5, 'pending')`,
-            [receipt_no.trim(), cleanWarehouseId, receipt_date, created_by, note || '']
+            [receipt_no, cleanWarehouseId, receipt_date, created_by, note || '']
         );
-        const receipt = await db.getOne(`SELECT id FROM production_receipts WHERE receipt_no = $1 ORDER BY id DESC LIMIT 1`, [receipt_no.trim()], client);
+        const receipt = await db.getOne(`SELECT id FROM production_receipts WHERE receipt_no = $1 ORDER BY id DESC LIMIT 1`, [receipt_no], client);
         for (const item of items) {
             if (!item.product_id) continue;
             await client.query(
@@ -63,7 +65,7 @@ const createRequest = async (req, res) => {
             );
         }
         await client.query('COMMIT');
-        res.status(201).json({ message: 'Da gui yeu cau cho Nha may!' });
+        res.status(201).json({ message: 'Da gui yeu cau cho Nha may!', receipt_no });
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Create receipt error:', err.message, 'Code:', err.code);

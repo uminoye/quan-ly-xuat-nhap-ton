@@ -264,7 +264,6 @@ export default function SalesOrdersPage() {
     const [note, setNote] = useState('');
     const [isCreateOrderOpen, setIsCreateOrderOpen] = useState(false);
     const [hoveredOrderId, setHoveredOrderId] = useState(null);
-    const orderNoInputRef = useRef(null);
 
     const [isReasonModalOpen, setIsReasonModalOpen] = useState(false);
     const [errorOrder, setErrorOrder] = useState(null);
@@ -401,7 +400,6 @@ export default function SalesOrdersPage() {
 
     const cancelEdit = () => {
         setEditingId(null);
-        setOrderNo('');
         setCustomerId('');
         setExpectedDate('');
         setNote('');
@@ -412,11 +410,10 @@ export default function SalesOrdersPage() {
 
     useEffect(() => {
         if (isCreateOrderOpen) {
-            const timer = window.setTimeout(() => orderNoInputRef.current?.focus(), 80);
-            return () => window.clearTimeout(timer);
+            // Form auto-opens, no focus needed
         }
         return undefined;
-    }, [isCreateOrderOpen, editingId]);
+    }, [isCreateOrderOpen]);
 
     useEffect(() => {
         const onKeyDown = (event) => {
@@ -449,8 +446,8 @@ export default function SalesOrdersPage() {
                 await api.put(`/orders/${editingId}`, orderData);
                 alert('Cập nhật thành công!');
             } else {
-                await api.post('/orders', { ...orderData, order_no: orderNo });
-                alert('Tạo đơn hàng thành công!');
+                const res = await api.post('/orders', { customer_id: customerId, order_date: orderDate, expected_delivery_date: expectedDate, note, items: selectedItems });
+                alert(`Tạo đơn hàng thành công! Mã đơn: ${res.data.order_no}`);
             }
             cancelEdit();
             fetchData();
@@ -650,10 +647,6 @@ export default function SalesOrdersPage() {
                         <div style={{ padding: '24px' }}>
                             <form onSubmit={handleSubmit}>
                                 <div style={pageStyles.formGrid}>
-                                    <div>
-                                        <label style={{ display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 700, color: '#334155' }}>Mã đơn hàng</label>
-                                        <input ref={orderNoInputRef} required placeholder="VD: SO-2026-001" value={orderNo} onChange={(e) => setOrderNo(e.target.value)} disabled={!!editingId} style={pageStyles.input} />
-                                    </div>
                                     <div>
                                         <label style={{ display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 700, color: '#334155' }}>Khách hàng</label>
                                         <select required value={customerId} onChange={(e) => setCustomerId(e.target.value)} style={pageStyles.input}>
