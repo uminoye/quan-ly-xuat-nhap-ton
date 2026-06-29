@@ -2,11 +2,13 @@ const db = require('../config/database');
 
 const getAllWarehouses = async (req, res) => {
     try {
-        const rows = await db.getAll(`SELECT * FROM warehouses ORDER BY id ASC`);
+        console.log('[WAREHOUSE] GET all - userId:', req.userId);
+        const rows = await db.getAll(`SELECT id, warehouse_code, name, location FROM warehouses ORDER BY id ASC`);
+        console.log('[WAREHOUSE] GET all - rows:', rows.length);
         res.status(200).json(rows);
     } catch (err) {
-        console.error('Warehouse GET error:', err.message);
-        res.status(500).json({ message: 'Loi lay danh sach kho' });
+        console.error('[WAREHOUSE] GET all error:', err.code, err.message);
+        res.status(500).json({ message: 'Loi lay danh sach kho', detail: err.message });
     }
 };
 
@@ -14,13 +16,20 @@ const createWarehouse = async (req, res) => {
     try {
         const { name, location } = req.body;
         if (!name) return res.status(400).json({ message: 'Ten kho khong duoc de trong' });
+        const year = new Date().getFullYear();
+        const existing = await db.getAll(`SELECT warehouse_code FROM warehouses WHERE warehouse_code LIKE $1`, [`KHO-${year}-%`]);
+        const nextNum = (existing.length + 1).toString().padStart(4, '0');
+        const warehouse_code = `KHO-${year}-${nextNum}`;
+        console.log('[WAREHOUSE] Create:', warehouse_code, name);
         const result = await db.run(
-            `INSERT INTO warehouses (name, location) VALUES ($1, $2) RETURNING id`,
-            [name, location]
+            `INSERT INTO warehouses (warehouse_code, name, location) VALUES ($1, $2, $3) RETURNING id, warehouse_code, name, location`,
+            [warehouse_code, name, location]
         );
-        res.status(201).json({ id: result.rows[0].id, name, location });
+        console.log('[WAREHOUSE] Created:', result.rows[0]);
+        res.status(201).json(result.rows[0]);
     } catch (err) {
-        res.status(500).json({ message: 'Loi khi them kho moi' });
+        console.error('[WAREHOUSE] Create error:', err.code, err.message);
+        res.status(500).json({ message: 'Loi khi them kho moi', detail: err.message });
     }
 };
 
@@ -39,6 +48,7 @@ const deleteWarehouse = async (req, res) => {
         res.status(200).json({ message: 'Da xoa kho thanh cong!' });
     } catch (err) {
         await client.query('ROLLBACK');
+        console.error('[WAREHOUSE] Delete error:', err.code, err.message);
         res.status(500).json({ message: 'Kho nay da co lich su giao dich, khong nen xoa!' });
     } finally {
         client.release();

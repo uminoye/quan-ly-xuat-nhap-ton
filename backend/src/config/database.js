@@ -5,11 +5,12 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
   max: 10,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
+  connectionTimeoutMillis: 10000,
+  statement_timeout: 15000,
 });
 
 pool.on('error', (err) => {
-  console.error('Unexpected database error:', err);
+  console.error('[DB] Unexpected pool error:', err.message);
 });
 
 const query = (text, params, client) => (client || pool).query(text, params);
