@@ -89,10 +89,10 @@ export default function ReceiptsPage() {
 
   const statusStyle = (status) => {
     const map = {
-      PENDING: { bg: '#fef3c7', color: '#92400e', label: 'Chờ NM duyệt' },
-      PROCESSING: { bg: '#dbeafe', color: '#1d4ed8', label: 'NM đang giao' },
-      COMPLETED: { bg: '#d1fae5', color: '#047857', label: 'Đã nhập kho' },
-      REJECTED: { bg: '#fee2e2', color: '#b91c1c', label: 'Bị từ chối' },
+      pending: { bg: '#fef3c7', color: '#92400e', label: 'Chờ NM duyệt' },
+      processing: { bg: '#dbeafe', color: '#1d4ed8', label: 'NM đang giao' },
+      completed: { bg: '#d1fae5', color: '#047857', label: 'Đã nhập kho' },
+      rejected: { bg: '#fee2e2', color: '#b91c1c', label: 'Bị từ chối' },
     };
     return map[status] || { bg: '#f3f4f6', color: '#374151', label: status || 'N/A' };
   };
@@ -197,9 +197,9 @@ export default function ReceiptsPage() {
 
   const stats = [
     { id: 'total', label: 'Tổng phiếu', value: receipts.length, color: '#2563eb', icon: statIcons.total },
-    { id: 'pending', label: 'Chờ duyệt', value: receipts.filter((r) => r.status === 'PENDING').length, color: '#f59e0b', icon: statIcons.pending },
-    { id: 'completed', label: 'Đã nhập', value: receipts.filter((r) => r.status === 'COMPLETED').length, color: '#10b981', icon: statIcons.completed },
-    { id: 'issues', label: 'Đang giao', value: receipts.filter((r) => r.status === 'PROCESSING').length, color: '#ef4444', icon: statIcons.processing },
+    { id: 'pending', label: 'Chờ duyệt', value: receipts.filter((r) => r.status === 'pending').length, color: '#f59e0b', icon: statIcons.pending },
+    { id: 'completed', label: 'Đã nhập', value: receipts.filter((r) => r.status === 'completed').length, color: '#10b981', icon: statIcons.completed },
+    { id: 'issues', label: 'Đang giao', value: receipts.filter((r) => r.status === 'processing').length, color: '#ef4444', icon: statIcons.processing },
   ];
 
   const tableWrapStyle = {
@@ -459,10 +459,10 @@ export default function ReceiptsPage() {
               </div>
               <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ width: '100%', padding: '12px 14px', borderRadius: '12px', border: '1px solid #dbe3ee' }}>
                 <option value="all">Tất cả trạng thái</option>
-                <option value="PENDING">Chờ duyệt</option>
-                <option value="PROCESSING">Đang giao</option>
-                <option value="COMPLETED">Đã nhập</option>
-                <option value="REJECTED">Bị từ chối</option>
+                <option value="pending">Chờ duyệt</option>
+                <option value="processing">Đang giao</option>
+                <option value="completed">Đã nhập</option>
+                <option value="rejected">Bị từ chối</option>
               </select>
               <select value={warehouseFilter} onChange={(e) => setWarehouseFilter(e.target.value)} style={{ width: '100%', padding: '12px 14px', borderRadius: '12px', border: '1px solid #dbe3ee' }}>
                 <option value="all">Tất cả kho</option>
@@ -529,7 +529,7 @@ export default function ReceiptsPage() {
                         <span style={{ display: 'inline-flex', alignItems: 'center', padding: '7px 11px', borderRadius: '999px', background: s.bg, color: s.color, fontSize: '12px', fontWeight: 700 }}>{s.label}</span>
                       </td>
                       <td style={{ ...cellStyle, textAlign: 'center' }}>
-                        {r.status === 'PENDING' && (roleId === 1 || roleId === 5) && (
+                        {(r.status === 'pending') && (roleId === 1 || roleId === 5) && (
                           <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
                             <button
                               type="button"
@@ -548,11 +548,11 @@ export default function ReceiptsPage() {
                           </div>
                         )}
 
-                        {r.status === 'PROCESSING' && (roleId === 1 || roleId === 4) && (
+                        {r.status === 'processing' && (roleId === 1 || roleId === 4) && (
                           <button type="button" onClick={() => handleConfirm(r.id)} style={{ padding: '10px 14px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '12px', fontWeight: 700, cursor: 'pointer' }}>Xác nhận</button>
                         )}
 
-                        {r.status !== 'PENDING' && r.status !== 'PROCESSING' && (
+                        {r.status !== 'pending' && r.status !== 'processing' && (
                           <button type="button" onClick={() => openDetailModal(r)} style={iconButtonStyle} title="Xem chi tiết phiếu">
                             <i className="ri-eye-line" />
                           </button>
