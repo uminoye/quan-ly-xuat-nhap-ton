@@ -387,7 +387,7 @@ export default function SalesOrdersPage() {
             const res = await api.get(`/orders/${order.id}/items`);
             setOrderNo(order.order_no);
             setCustomerId(order.customer_id);
-            setExpectedDate(order.expected_delivery_date);
+            setExpectedDate(order.expected_delivery_date ? new Date(order.expected_delivery_date).toISOString().split('T')[0] : '');
             setNote(order.note || '');
             setSelectedItems(res.data);
             setEditingId(order.id);
@@ -886,7 +886,7 @@ export default function SalesOrdersPage() {
                                             <td style={{ padding: '16px 18px', color: '#475569', fontSize: 13, lineHeight: 1.6, maxWidth: 420 }}>
                                                 {formatOrderItems(o)}
                                             </td>
-                                            <td style={{ padding: '16px 18px', color: '#334155' }}>{o.expected_delivery_date}</td>
+                                            <td style={{ padding: '16px 18px', color: '#334155' }}>{o.expected_delivery_date ? new Date(o.expected_delivery_date).toLocaleDateString('vi-VN') : '---'}</td>
                                             <td style={{ padding: '16px 18px' }}>
                                                 <span style={{ ...style, display: 'inline-flex', alignItems: 'center', padding: '8px 12px', borderRadius: 999, fontSize: 12, fontWeight: 800 }}>
                                                     {config.label}
@@ -1018,7 +1018,7 @@ export default function SalesOrdersPage() {
                                 </div>
                                 <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 18, padding: 16, boxShadow: '0 10px 24px rgba(15,23,42,0.04)' }}>
                                     <div style={{ fontSize: 12, color: '#64748b', fontWeight: 700, marginBottom: 8 }}>Ngày giao dự kiến</div>
-                                    <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a' }}>{viewOrder.expected_delivery_date || '---'}</div>
+                                    <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a' }}>{viewOrder.expected_delivery_date ? new Date(viewOrder.expected_delivery_date).toLocaleDateString('vi-VN') : '---'}</div>
                                 </div>
                                 <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 18, padding: 16, boxShadow: '0 10px 24px rgba(15,23,42,0.04)' }}>
                                     <div style={{ fontSize: 12, color: '#64748b', fontWeight: 700, marginBottom: 8 }}>Trạng thái</div>
@@ -1116,7 +1116,7 @@ export default function SalesOrdersPage() {
                                 </div>
                                 <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 18, padding: 16 }}>
                                     <div style={{ fontSize: 12, color: '#64748b', fontWeight: 700, marginBottom: 8 }}>Ngày hủy</div>
-                                    <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a' }}>{cancelReasonOrder.updated_at || cancelReasonOrder.created_at || '---'}</div>
+                                    <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a' }}>{cancelReasonOrder.updated_at ? new Date(cancelReasonOrder.updated_at).toLocaleDateString('vi-VN') : cancelReasonOrder.created_at ? new Date(cancelReasonOrder.created_at).toLocaleDateString('vi-VN') : '---'}</div>
                                 </div>
                                 <div style={{ gridColumn: '1 / -1', background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 18, padding: 16 }}>
                                     <div style={{ fontSize: 12, color: '#be123c', fontWeight: 700, marginBottom: 8 }}>Lý do hủy</div>

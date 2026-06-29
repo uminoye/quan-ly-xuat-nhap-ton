@@ -131,19 +131,37 @@ const updateOrder = async (req, res) => {
 };
 
 const deleteOrder = async (req, res) => {
+    const client = await db.pool.connect();
     try {
         const { id } = req.params;
-        const order = await db.getOne(`SELECT status FROM sales_orders WHERE id = $1`, [id]);
-        if (!order) return res.status(404).json({ message: 'Khong tim thay don hang' });
-        const currentStatus = order.status || 'pending';
+        const order = await client.query(`SELECT status FROM sales_orders WHERE id = $1`, [id]);
+        if (!order.rows.length) return res.status(404).json({ message: 'Khong tim thay don hang' });
+        const currentStatus = order.rows[0].status || 'pending';
         if (currentStatus !== 'pending' && currentStatus !== 'returned') {
             return res.status(400).json({ message: 'Khong the xoa don hang da duoc xu ly!' });
         }
-        await db.run(`DELETE FROM sales_order_items WHERE order_id = $1`, [id]);
-        await db.run(`DELETE FROM sales_orders WHERE id = $1`, [id]);
+        await client.query('BEGIN');
+        // Xoa cac bang con theo dung thu tu (neu co FK)
+        const outboundNotes = await client.query(
+            `SELECT id FROM stock_outbound_notes WHERE order_id = $1`, [id]
+        );
+        for (const note of outboundNotes.rows) {
+            await client.query(
+                `DELETE FROM stock_outbound_note_items WHERE outbound_note_id = $1`, [note.id]
+            );
+        }
+        await client.query(`DELETE FROM stock_outbound_notes WHERE order_id = $1`, [id]);
+        await client.query(`DELETE FROM delivery_requests WHERE order_id = $1`, [id]);
+        await client.query(`DELETE FROM sales_order_items WHERE order_id = $1`, [id]);
+        await client.query(`DELETE FROM sales_orders WHERE id = $1`, [id]);
+        await client.query('COMMIT');
         res.status(200).json({ message: 'Da xoa don hang thanh cong' });
     } catch (err) {
-        res.status(500).json({ message: 'Loi khi xoa' });
+        await client.query('ROLLBACK');
+        console.error('Delete order error:', err.message);
+        res.status(500).json({ message: 'Loi khi xoa: ' + err.message });
+    } finally {
+        client.release();
     }
 };
 
