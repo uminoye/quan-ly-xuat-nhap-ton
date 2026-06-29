@@ -1,0 +1,157 @@
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  overflow: hidden;
+  background: #eef2f7;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.dashboard-hover-card {
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease, filter 180ms ease;
+}
+
+.dashboard-hover-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--hover-shadow, 0 20px 44px rgba(15, 23, 42, 0.12));
+  border-color: var(--hover-border, #cbd5e1);
+}
+
+.dashboard-stat-card:hover > div:first-child {
+  transform: scale(1.06);
+}
+
+.modal-animate {
+  animation: modalFadeIn 220ms ease-out both;
+}
+
+.modal-panel-animate {
+  animation: modalScaleIn 220ms ease-out both;
+}
+
+@keyframes modalFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modalScaleIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modal-enter {
+  animation: modalEnter 180ms ease-out;
+}
+
+@keyframes modalEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.status-table-animate {
+  animation: statusTableEnter 320ms ease-out both;
+  transform-origin: top center;
+}
+
+.status-table-animate tbody tr {
+  animation: statusRowEnter 420ms ease-out both;
+}
+
+.status-table-animate tbody tr:nth-child(1) { animation-delay: 40ms; }
+.status-table-animate tbody tr:nth-child(2) { animation-delay: 80ms; }
+.status-table-animate tbody tr:nth-child(3) { animation-delay: 120ms; }
+.status-table-animate tbody tr:nth-child(4) { animation-delay: 160ms; }
+.status-table-animate tbody tr:nth-child(5) { animation-delay: 200ms; }
+.status-table-animate tbody tr:nth-child(6) { animation-delay: 240ms; }
+.status-table-animate tbody tr:nth-child(7) { animation-delay: 280ms; }
+.status-table-animate tbody tr:nth-child(8) { animation-delay: 320ms; }
+.status-table-animate tbody tr:nth-child(9) { animation-delay: 360ms; }
+.status-table-animate tbody tr:nth-child(10) { animation-delay: 400ms; }
+
+.dashboard-enter {
+  animation: dashboardEnter 260ms ease-out both;
+  transform-origin: top center;
+}
+
+.dashboard-enter-delay-1 { animation-delay: 60ms; }
+.dashboard-enter-delay-2 { animation-delay: 120ms; }
+.dashboard-enter-delay-3 { animation-delay: 180ms; }
+.dashboard-enter-delay-4 { animation-delay: 240ms; }
+.dashboard-enter-delay-5 { animation-delay: 300ms; }
+
+.dashboard-block-enter {
+  animation: dashboardBlockEnter 300ms ease-out both;
+  transform-origin: top center;
+}
+
+.dashboard-block-delay-1 { animation-delay: 80ms; }
+.dashboard-block-delay-2 { animation-delay: 160ms; }
+.dashboard-block-delay-3 { animation-delay: 240ms; }
+.dashboard-block-delay-4 { animation-delay: 320ms; }
+.dashboard-block-delay-5 { animation-delay: 400ms; }
+
+@keyframes dashboardEnter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes dashboardBlockEnter {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes statusTableEnter {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes statusRowEnter {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+

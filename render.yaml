@@ -1,0 +1,26 @@
+# render.yaml - Backend API Service tren Render
+# Khi tao service tren Render, doi "render.yaml" o day thanh "spec" trong Render dashboard
+# Hoac copy noi dung nay vao Render Dashboard khi tao Web Service
+
+services:
+  - type: web
+    name: inventory-backend
+    env: node
+    region: singapore
+    plan: free
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: node src/server.js
+    healthCheckPath: /api/test
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: FRONTEND_URL
+        value: https://your-frontend.vercel.app
+        sync: false

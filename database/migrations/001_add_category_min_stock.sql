@@ -1,0 +1,2 @@
+-- Migration giữ lại để tham khảo lịch sử thay đổi cấu trúc bảng products.
+-- Cấu trúc thực tế hiện được nâng cấp an toàn trong backend/src/config/database.js.
