@@ -5,6 +5,7 @@ const getAllWarehouses = async (req, res) => {
         const rows = await db.getAll(`SELECT * FROM warehouses ORDER BY id ASC`);
         res.status(200).json(rows);
     } catch (err) {
+        console.error('Warehouse GET error:', err.message);
         res.status(500).json({ message: 'Loi lay danh sach kho' });
     }
 };
