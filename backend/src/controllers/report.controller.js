@@ -56,14 +56,14 @@ const getDashboardStats = async (req, res) => {
             db.getAll(`
                 SELECT
                     p.id, p.sku, p.name,
-                    COALESCE(p.stock, ib.total_stock, 0) as stock, p.unit
+                    COALESCE(ib.on_hand_qty, 0) as stock, p.unit
                 FROM products p
                 LEFT JOIN (
-                    SELECT product_id, SUM(on_hand_qty) as total_stock
+                    SELECT product_id, SUM(on_hand_qty) as on_hand_qty
                     FROM inventory_balances GROUP BY product_id
                 ) ib ON ib.product_id = p.id
-                WHERE COALESCE(p.stock, ib.total_stock, 0) < 50
-                ORDER BY COALESCE(p.stock, ib.total_stock, 0) ASC, p.name ASC
+                WHERE COALESCE(ib.on_hand_qty, 0) < p.min_stock
+                ORDER BY COALESCE(ib.on_hand_qty, 0) ASC, p.name ASC
                 LIMIT 10
             `),
             db.getAll(`
