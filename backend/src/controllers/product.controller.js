@@ -24,10 +24,12 @@ const getAllProducts = async (req, res) => {
             ORDER BY p.id DESC
         `;
         const rows = await db.getAll(query);
+        console.log(`[products GET] success, rows: ${rows.length}`);
         res.status(200).json(rows);
     } catch (err) {
         console.error('[products GET] error:', err);
-        res.status(500).json({ message: 'Loi Database', error: err.message });
+        console.error('[products GET] stack:', err.stack);
+        res.status(500).json({ message: 'Loi Database', error: err.message, detail: err.stack });
     }
 };
 
