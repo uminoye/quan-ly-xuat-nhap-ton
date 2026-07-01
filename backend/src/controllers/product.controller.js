@@ -1,5 +1,4 @@
 const db = require('../config/database');
-const generateCode = require('../utils/autoCode');
 
 const getAllProducts = async (req, res) => {
     try {
@@ -29,7 +28,7 @@ const getAllProducts = async (req, res) => {
     } catch (err) {
         console.error('[products GET] error:', err);
         console.error('[products GET] stack:', err.stack);
-        res.status(500).json({ message: 'Loi Database', error: err.message, detail: err.stack });
+        res.status(500).json({ message: 'Loi Database', error: err.message });
     }
 };
 
@@ -37,40 +36,78 @@ const createProduct = async (req, res) => {
     const client = await db.pool.connect();
     try {
         const { name, sale_price, unit, category, image_url, min_stock, warehouse_id, initial_stock } = req.body;
-        if (!name || !sale_price) {
-            return res.status(400).json({ message: 'Vui long nhap Ten va Gia' });
+
+        // Validate
+        if (!name || String(name).trim().length === 0) {
+            return res.status(400).json({ message: 'Vui long nhap Ten san pham' });
         }
-        const sku = await generateCode('product');
-        const result = await client.query(
+        if (!sale_price || isNaN(Number(sale_price)) || Number(sale_price) <= 0) {
+            return res.status(400).json({ message: 'Vui long nhap Don gia hop le' });
+        }
+
+        await client.query('BEGIN');
+
+        // Sinh SKU trong cùng transaction
+        const prefix = 'SP';
+        const year = new Date().getFullYear();
+        const pattern = `${prefix}-${year}-%`;
+        const lockRes = await client.query(
+            `SELECT code FROM auto_codes WHERE code LIKE $1 ORDER BY code DESC LIMIT 1 FOR UPDATE`,
+            [pattern]
+        );
+        let nextNum = 1;
+        if (lockRes.rows[0]?.code) {
+            const lastNum = parseInt(lockRes.rows[0].code.split('-').pop(), 10);
+            nextNum = isNaN(lastNum) ? 1 : lastNum + 1;
+        }
+        const sku = `${prefix}-${year}-${String(nextNum).padStart(4, '0')}`;
+        await client.query(
+            `INSERT INTO auto_codes (code, prefix, year) VALUES ($1, $2, $3) ON CONFLICT (code) DO NOTHING`,
+            [sku, prefix, year]
+        );
+
+        // Insert san pham
+        const insertRes = await client.query(
             `INSERT INTO products (sku, name, sale_price, unit, category, image_url, min_stock)
              VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-            [sku, name, sale_price, unit || 'cai', category || null, image_url || null, parseInt(min_stock, 10) || 50]
+            [sku, String(name).trim(), Number(sale_price), unit || 'Cai', category || null, image_url || null, parseInt(min_stock, 10) || 50]
         );
-        const productId = result.rows[0].id;
+        const productId = insertRes.rows[0].id;
         const stockQty = parseInt(initial_stock, 10) || 0;
 
         if (stockQty > 0) {
             if (warehouse_id === 'all') {
-                const warehouses = await db.getAll(`SELECT id FROM warehouses`);
-                for (const row of warehouses) {
+                const whRes = await client.query(`SELECT id FROM warehouses`);
+                for (const row of whRes.rows) {
                     await client.query(
-                        `INSERT INTO inventory_balances (warehouse_id, product_id, on_hand_qty) VALUES ($1, $2, $3)`,
+                        `INSERT INTO inventory_balances (warehouse_id, product_id, on_hand_qty)
+                         VALUES ($1, $2, $3)
+                         ON CONFLICT (warehouse_id, product_id) DO UPDATE SET on_hand_qty = $3, updated_at = CURRENT_TIMESTAMP`,
                         [row.id, productId, stockQty]
                     );
                 }
-            } else {
+            } else if (warehouse_id) {
                 await client.query(
-                    `INSERT INTO inventory_balances (warehouse_id, product_id, on_hand_qty) VALUES ($1, $2, $3)`,
+                    `INSERT INTO inventory_balances (warehouse_id, product_id, on_hand_qty)
+                     VALUES ($1, $2, $3)
+                     ON CONFLICT (warehouse_id, product_id) DO UPDATE SET on_hand_qty = $3, updated_at = CURRENT_TIMESTAMP`,
                     [warehouse_id, productId, stockQty]
                 );
             }
         }
-        res.status(201).json({ message: stockQty > 0 ? 'Them SP va luu Ton kho thanh cong!' : 'Them san pham thanh cong!', sku });
+
+        await client.query('COMMIT');
+        res.status(201).json({
+            message: stockQty > 0 ? 'Them SP va luu Ton kho thanh cong!' : 'Them san pham thanh cong!',
+            sku
+        });
     } catch (err) {
-        if (err.message.includes('duplicate') || err.message.includes('unique')) {
-            return res.status(400).json({ message: `Ma SKU da ton tai! Vui long thu lai.` });
+        await client.query('ROLLBACK').catch(() => {});
+        console.error('[createProduct] error:', err.message);
+        if (err.code === '23505') { // unique_violation
+            return res.status(400).json({ message: 'Ma SKU da ton tai! Vui long thu lai.' });
         }
-        res.status(500).json({ message: 'Loi Database' });
+        res.status(500).json({ message: 'Loi Database', error: err.message });
     } finally {
         client.release();
     }
@@ -92,17 +129,17 @@ const updateProduct = async (req, res) => {
                 return res.status(400).json({ message: 'Muon sua ton kho thi phai chon dung 1 kho cu the!' });
             }
             const newQty = parseInt(adjust_stock, 10) || 0;
-            const existing = await db.getOne(`SELECT id FROM inventory_balances WHERE product_id = $1 AND warehouse_id = $2`, [id, target_warehouse]);
-            if (existing) {
-                await client.query(`UPDATE inventory_balances SET on_hand_qty = $1, updated_at = CURRENT_TIMESTAMP WHERE product_id = $2 AND warehouse_id = $3`, [newQty, id, target_warehouse]);
-            } else {
-                await client.query(`INSERT INTO inventory_balances (warehouse_id, product_id, on_hand_qty) VALUES ($1, $2, $3)`, [target_warehouse, id, newQty]);
-            }
+            await client.query(
+                `INSERT INTO inventory_balances (warehouse_id, product_id, on_hand_qty)
+                 VALUES ($1, $2, $3)
+                 ON CONFLICT (warehouse_id, product_id) DO UPDATE SET on_hand_qty = $3, updated_at = CURRENT_TIMESTAMP`,
+                [target_warehouse, id, newQty]
+            );
             return res.status(200).json({ message: 'Da cap nhat SP va Dieu chinh ton kho thanh cong!' });
         }
         res.status(200).json({ message: 'Cap nhat thong tin san pham thanh cong!' });
     } catch (err) {
-        if (err.message.includes('duplicate') || err.message.includes('unique')) {
+        if (err.code === '23505') {
             return res.status(400).json({ message: `Ma SKU "${req.body.sku}" da ton tai!` });
         }
         res.status(500).json({ message: 'Loi Database khi cap nhat thong tin' });
