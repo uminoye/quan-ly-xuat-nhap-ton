@@ -38,7 +38,7 @@ const createProduct = async (req, res) => {
         if (!name || !sale_price) {
             return res.status(400).json({ message: 'Vui long nhap Ten va Gia' });
         }
-        const sku = await generateCode('product');
+        const sku = await generateCode('product', client);
         const result = await client.query(
             `INSERT INTO products (sku, name, sale_price, unit, category, image_url, min_stock)
              VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,

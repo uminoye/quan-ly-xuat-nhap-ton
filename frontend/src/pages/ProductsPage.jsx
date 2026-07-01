@@ -215,6 +215,11 @@ export default function ProductsPage() {
   const [targetWarehouse, setTargetWarehouse] = useState('all');
   const [filterMode, setFilterMode] = useState('all');
 
+  // Category management
+  const [categories, setCategories] = useState(['Ống thép', 'Phụ kiện', 'Vật tư', 'Thiết bị']);
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [newCategoryInput, setNewCategoryInput] = useState('');
+
   // Warehouse form
   const [whName, setWhName] = useState('');
   const [whLocation, setWhLocation] = useState('');
@@ -337,6 +342,19 @@ export default function ProductsPage() {
     } catch (error) {
       alert(error.response?.data?.message || error.message);
     }
+  };
+
+  const handleAddCategory = () => {
+    const name = newCategoryInput.trim();
+    if (!name) return;
+    if (categories.includes(name)) {
+      alert('Danh mục này đã tồn tại!');
+      return;
+    }
+    setCategories(prev => [...prev, name]);
+    setNewCategory(name);
+    setIsCategoryModalOpen(false);
+    setNewCategoryInput('');
   };
 
   const handleSubmitProduct = async (e) => {
@@ -765,17 +783,33 @@ export default function ProductsPage() {
                 </Field>
 
                 <Field label="Danh mục">
-                  <FormInput
-                    list="product-categories"
-                    value={newCategory}
-                    onChange={e => setNewCategory(e.target.value)}
-                    placeholder="VD: Ống thép, Phụ kiện, Vật tư..."
-                  />
-                  <datalist id="product-categories">
-                    {['Ống thép', 'Phụ kiện', 'Vật tư', 'Thiết bị', 'Điện tử', 'Cơ khí'].map(c => (
-                      <option key={c} value={c} />
-                    ))}
-                  </datalist>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <FormSelect
+                      value={newCategory}
+                      onChange={e => setNewCategory(e.target.value)}
+                      style={{ flex: 1 }}
+                    >
+                      <option value="">-- Chọn danh mục --</option>
+                      {categories.map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </FormSelect>
+                    <button
+                      type="button"
+                      onClick={() => setIsCategoryModalOpen(true)}
+                      style={{
+                        height: 42, padding: '0 14px',
+                        borderRadius: radius.md,
+                        border: `1.5px solid ${colors.primaryBorder}`,
+                        background: colors.primarySoft, color: colors.primary,
+                        fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: 5,
+                        flexShrink: 0,
+                      }}
+                    >
+                      <IconPlus /> Thêm
+                    </button>
+                  </div>
                 </Field>
 
                 <Field label="Ảnh sản phẩm" hint="Dán URL ảnh sản phẩm">
@@ -877,6 +911,57 @@ export default function ProductsPage() {
                   </button>
                 </div>
               </form>
+            </div>
+          </Modal>
+        )}
+
+        {/* ---- MODAL: ADD CATEGORY ---- */}
+        {isCategoryModalOpen && (
+          <Modal onClose={() => { setIsCategoryModalOpen(false); setNewCategoryInput(''); }} maxW={380}>
+            <ModalHeader
+              title="Thêm danh mục mới"
+              subtitle="Nhập tên danh mục sản phẩm"
+              icon={<IconPlus />}
+              color={colors.primary}
+              onClose={() => { setIsCategoryModalOpen(false); setNewCategoryInput(''); }}
+            />
+            <div style={{ padding: spacing.lg }}>
+              <Field label="Tên danh mục" required>
+                <FormInput
+                  value={newCategoryInput}
+                  onChange={e => setNewCategoryInput(e.target.value)}
+                  placeholder="VD: Thiết bị điện"
+                  autoFocus
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddCategory(); } }}
+                />
+              </Field>
+              <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {categories.map(c => (
+                  <span key={c} style={{
+                    padding: '4px 10px', borderRadius: radius.full,
+                    background: colors.backgroundAlt, color: colors.textSecondary,
+                    fontSize: 12, fontWeight: 600,
+                  }}>
+                    {c}
+                  </span>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+                <button
+                  type="button"
+                  onClick={() => { setIsCategoryModalOpen(false); setNewCategoryInput(''); }}
+                  style={btn('secondary', 'md')}
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddCategory}
+                  style={{ ...btn('primary', 'md'), flex: 1 }}
+                >
+                  <IconPlus /> Thêm danh mục
+                </button>
+              </div>
             </div>
           </Modal>
         )}
