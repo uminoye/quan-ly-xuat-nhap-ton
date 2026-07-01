@@ -605,10 +605,11 @@ export default function ProductsPage() {
                 >
                   {/* Image */}
                   <div style={{
-                    height: 160, position: 'relative', overflow: 'hidden',
+                    height: 220, position: 'relative', overflow: 'hidden',
                     background: item.image_url
                       ? `url(${item.image_url}) center/cover no-repeat`
-                      : `linear-gradient(135deg, ${colors.primarySoft} 0%, #e0e7ff 100%)`,
+                      : `linear-gradient(160deg, ${colors.primarySoft} 0%, #e8edf8 60%, ${colors.primarySoft}88 100%)`,
+                    borderBottom: `1px solid ${colors.borderLight}`,
                   }}>
                     {!item.image_url && (
                       <div style={{
@@ -638,7 +639,7 @@ export default function ProductsPage() {
                   </div>
 
                   {/* Content */}
-                  <div style={{ padding: '14px 16px 16px' }}>
+                  <div style={{ padding: '18px 18px 18px' }}>
                     <h3 style={{
                       margin: '0 0 8px', fontSize: 15, fontWeight: 800,
                       color: colors.text, lineHeight: 1.3,
