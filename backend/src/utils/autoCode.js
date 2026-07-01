@@ -1,6 +1,7 @@
 /**
  * Sinh mã tiếp theo cho một loại document.
- * Format: PREFIX-YYYY-NNNN (VD: YC-2026-0042)
+ * Luôn chạy trong transaction riêng để tránh race condition.
+ * Format: PREFIX-YYYY-NNNN (VD: SP-2026-0001)
  *
  * @param {string} type       - receipt | order | outbound | product | customer
  * @param {object} dbClient  - optional: pg client từ transaction đang chạy
@@ -22,19 +23,28 @@ const generateCode = async (type, dbClient) => {
   const year = new Date().getFullYear();
   const pattern = `${prefix}-${year}-%`;
 
-  // Dùng client của caller nếu có (khi nằm trong transaction)
-  const getOne = dbClient
-    ? (text, params) => dbClient.query(text, params).then(r => r.rows[0] || null)
-    : db.getOne;
+  // Nếu caller truyền vào pg client (đang trong transaction), dùng nó
+  // Nếu không, tạo transaction riêng để đảm bảo FOR UPDATE lock hoạt động
+  if (dbClient) {
+    return _generateInClient(dbClient, prefix, year, pattern);
+  }
 
-  const run = dbClient
-    ? (text, params) => dbClient.query(text, params)
-    : db.run;
+  const client = await db.pool.connect();
+  try {
+    return await _generateInClient(client, prefix, year, pattern);
+  } finally {
+    client.release();
+  }
+};
 
-  const row = await getOne(
+async function _generateInClient(client, prefix, year, pattern) {
+  await client.query('BEGIN');
+
+  const lockResult = await client.query(
     `SELECT code FROM auto_codes WHERE code LIKE $1 ORDER BY code DESC LIMIT 1 FOR UPDATE`,
-    [pattern]
+    [`${prefix}-${year}-%`]
   );
+  const row = lockResult.rows[0];
 
   let nextNum = 1;
   if (row?.code) {
@@ -44,12 +54,13 @@ const generateCode = async (type, dbClient) => {
 
   const newCode = `${prefix}-${year}-${String(nextNum).padStart(4, '0')}`;
 
-  await run(
+  await client.query(
     `INSERT INTO auto_codes (code, prefix, year) VALUES ($1, $2, $3) ON CONFLICT (code) DO NOTHING`,
     [newCode, prefix, year]
   );
 
+  await client.query('COMMIT');
   return newCode;
-};
+}
 
 module.exports = { generateCode };
