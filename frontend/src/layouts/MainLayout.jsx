@@ -452,7 +452,7 @@ export default function MainLayout() {
               </button>
               <div>
                 <div style={{ fontWeight: 800, fontSize: 15, color: C.text, letterSpacing: 0.4 }}>STEEL STOCK</div>
-                <div style={{ fontSize: 11, color: C.muted }}>{menuMeta[activePath]?.label || 'Trang chủ'}</div>
+                <div style={{ fontSize: 11, color: C.muted }}>{menuGroups.find((m) => m.path === activePath)?.title || 'Kho'}</div>
               </div>
             </div>
             <button onClick={() => setShowUserMenu((p) => !p)} style={{ border: '1px solid #e0e7ff', background: C.white, borderRadius: 999, padding: '4px 8px 4px 4px', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
