@@ -311,11 +311,12 @@ export default function ProductsPage() {
   });
 
   const nextSku = useMemo(() => {
+    const year = new Date().getFullYear();
     const max = products.reduce((best, p) => {
-      const m = p.sku?.match(/^SP-?(\d+)$/i);
+      const m = p.sku?.match(/^SP-\d{4}-(\d+)$/i);
       return m ? Math.max(best, parseInt(m[1], 10)) : best;
     }, 0);
-    return `SP-${String(max + 1).padStart(4, '0')}`;
+    return `SP-${year}-${String(max + 1).padStart(4, '0')}`;
   }, [products]);
 
   // ---- Actions ----
