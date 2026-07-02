@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { MENU_ITEMS } from '../config/menuConfig';
 import 'remixicon/fonts/remixicon.css';
@@ -65,10 +65,21 @@ export default function MainLayout() {
   const [collapsed, setCollapsed] = useState(window.innerWidth <= 1100);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
 
-  // Sync collapsed state with viewport width
+  // Determine viewport layout mode and compute padding
+  const { layoutMode, paddingLeft } = useMemo(() => {
+    const w = window.innerWidth;
+    if (w <= 900)  return { layoutMode: 'mobile',  paddingLeft: 0 };
+    if (w <= 1100) return { layoutMode: 'tablet',  paddingLeft: 56 };
+    return              { layoutMode: 'desktop', paddingLeft: collapsed ? 56 : 220 };
+  }, [collapsed]);
+
+  // Sync collapsed state when viewport changes (keeps state in sync)
   useEffect(() => {
-    const onResize = () => setCollapsed(window.innerWidth <= 1100);
+    const onResize = () => {
+      if (window.innerWidth <= 1100) setCollapsed(true);
+    };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
@@ -95,8 +106,6 @@ export default function MainLayout() {
     navigate('/login');
   };
 
-  const sidebarW = collapsed ? C.sidebarCollapsed : C.sidebarWidth;
-
   return (
     <>
       <style>{`
@@ -118,12 +127,11 @@ export default function MainLayout() {
           .ml-topbar-h { display: flex !important; }
         }
 
-        /* Auto-collapse sidebar when viewport is narrow (zoom in / small screen) */
-        @media (max-width: 1100px) {
-          .ml-sidebar  { width: 56px !important; min-width: 56px !important; }
+        /* Tablet: nav styling */
+        @media (min-width: 901px) and (max-width: 1100px) {
           .ml-sidebar .ml-logo-text  { display: none !important; }
           .ml-sidebar .ml-group-lbl  { display: none !important; }
-          .ml-sidebar .ml-nav-item   { justify-content: center !important; padding: 8px 0 !important; }
+          .ml-sidebar .ml-nav-item   { justify-content: center !important; }
           .ml-sidebar .ml-nav-lbl    { display: none !important; }
           .ml-sidebar .ml-collapse-btn { justify-content: center !important; padding-left: 0 !important; }
           .ml-sidebar .ml-collapse-lbl { display: none !important; }
@@ -131,9 +139,8 @@ export default function MainLayout() {
 
         /* Mobile: sidebar slides in/out */
         @media (max-width: 900px) {
-          .ml-sidebar { transform: translateX(-100%); transition: transform 280ms ease; }
+          .ml-sidebar { transform: translateX(-100%); }
           .ml-sidebar.open { transform: translateX(0); }
-          .ml-main.with-sidebar { padding-left: 0 !important; }
           .ml-topbar-h { display: none !important; }
           .ml-topbar-m { display: flex !important; }
         }
@@ -141,11 +148,6 @@ export default function MainLayout() {
         @media (min-width: 901px) {
           .ml-topbar-m { display: none !important; }
           .ml-topbar-h { display: flex !important; }
-        }
-
-        /* Desktop: main content offset by sidebar width */
-        @media (min-width: 1101px) {
-          .ml-main.with-sidebar { padding-left: 220px !important; }
         }
 
         /* Overlay */
@@ -168,15 +170,15 @@ export default function MainLayout() {
         <aside
           className={`ml-sidebar${mobileOpen ? ' open' : ''}`}
           style={{
-            width: sidebarW,
-            minWidth: sidebarW,
+            width: layoutMode === 'mobile' ? (mobileOpen ? 220 : 0) : layoutMode === 'tablet' ? 56 : (collapsed ? 56 : 220),
+            minWidth: layoutMode === 'mobile' ? (mobileOpen ? 220 : 0) : layoutMode === 'tablet' ? 56 : (collapsed ? 56 : 220),
             transition: 'width 280ms ease, min-width 280ms ease, transform 280ms ease',
             background: C.sidebarBg,
             color: C.white,
             display: 'flex',
             flexDirection: 'column',
             boxShadow: '2px 0 16px rgba(0,0,0,0.25)',
-            overflow: 'hidden',
+            overflow: layoutMode === 'mobile' ? (mobileOpen ? 'auto' : 'hidden') : 'hidden',
             height: '100dvh',
             position: 'fixed',
             left: 0,
@@ -287,7 +289,7 @@ export default function MainLayout() {
         </aside>
 
         {/* ── MAIN ── */}
-        <div className="ml-main with-sidebar" style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden', paddingLeft: sidebarW, transition: 'padding-left 280ms ease' }}>
+        <div className="ml-main with-sidebar" style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden', paddingLeft, transition: 'padding-left 280ms ease' }}>
 
           {/* Desktop Topbar */}
           <header className="ml-topbar-h" style={{ height: 64, flexShrink: 0, background: C.white, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', boxShadow: '0 2px 18px rgba(37,99,235,0.06)', borderBottom: '1.5px solid #e0e7ff', position: 'relative', zIndex: 20 }}>
