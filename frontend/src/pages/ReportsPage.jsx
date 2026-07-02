@@ -408,7 +408,7 @@ export default function ReportsPage() {
               <h3 style={{ margin: 0, color: '#0f172a', fontSize: '18px' }}>Biểu đồ cột top 6</h3>
               <p style={{ margin: '6px 0 14px', color: '#64748b', fontSize: '14px' }}>So sánh các mặt hàng có giá trị tồn cao nhất trong dữ liệu đã lọc.</p>
               {chartData.length > 0 ? (
-                <div style={{ width: '100%', height: 320 }}>
+                <div style={{ width: '100%', height: 320, minWidth: 0 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 10 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -438,7 +438,7 @@ export default function ReportsPage() {
                 </div>
               </div>
 
-              <div style={{ width: '100%', height: 280, marginTop: '8px' }}>
+              <div style={{ width: '100%', height: 280, marginTop: '8px', minWidth: 0 }}>
                 {warehouseChartData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>

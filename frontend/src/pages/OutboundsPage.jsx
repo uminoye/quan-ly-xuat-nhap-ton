@@ -565,8 +565,12 @@ export default function OutboundsPage() {
                 onMouseLeave={() => setHoveredStat(null)}
                 style={{
                   background: 'linear-gradient(180deg, rgba(255,255,255,0.98), rgba(241,245,249,0.94))',
-                  border: `1px solid ${isHovered ? (statHoverStyles[stat.id]?.borderColor || '#e8eef5') : '#e8eef5'}`,
-                  borderTop: '4px solid transparent',
+                  borderWidth: '1px',
+                  borderStyle: 'solid',
+                  borderColor: isHovered ? (statHoverStyles[stat.id]?.borderColor || '#e8eef5') : '#e8eef5',
+                  borderTopWidth: '4px',
+                  borderTopStyle: 'solid',
+                  borderTopColor: 'transparent',
                   borderRadius: '18px',
                   padding: '18px 20px',
                   boxShadow: isHovered ? (statHoverStyles[stat.id]?.boxShadow || '0 18px 34px rgba(15,23,42,0.10)') : '0 10px 24px rgba(15, 23, 42, 0.04)',

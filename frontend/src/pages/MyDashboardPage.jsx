@@ -315,7 +315,7 @@ export default function MyDashboardPage() {
                 <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: '#60a5fa', marginRight: 5 }} />Xuất kho</span>
               </div>
             </div>
-            <div style={{ height: 300 }}>
+            <div style={{ height: 300, minWidth: 0 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={monthlyImportExportData} barGap={8}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e0e7ff" />
@@ -334,7 +334,7 @@ export default function MyDashboardPage() {
           <div style={{ ...cardBase }}>
             <h3 style={{ margin: 0, color: '#0f172a', fontSize: 16, fontWeight: 800 }}>Danh mục sản phẩm</h3>
             <p style={{ margin: '4px 0 14px', color: '#94a3b8', fontSize: 12 }}>Tỷ lệ theo tồn kho hiện tại</p>
-            <div style={{ height: 200 }}>
+            <div style={{ height: 200, minWidth: 0 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie data={categoryData} dataKey="value" nameKey="name" innerRadius={52} outerRadius={82} paddingAngle={3}>
