@@ -310,6 +310,14 @@ export default function ProductsPage() {
     return matchesStatus && matchesSearch;
   });
 
+  const nextSku = useMemo(() => {
+    const max = products.reduce((best, p) => {
+      const m = p.sku?.match(/^SP-?(\d+)$/i);
+      return m ? Math.max(best, parseInt(m[1], 10)) : best;
+    }, 0);
+    return `SP-${String(max + 1).padStart(4, '0')}`;
+  }, [products]);
+
   // ---- Actions ----
   const openAddModal = () => {
     setEditingId(null);
@@ -369,6 +377,7 @@ export default function ProductsPage() {
         });
       } else {
         await api.post('/products', {
+          sku: nextSku,
           name: newName, sale_price: newPrice, unit: newUnit,
           category: newCategory, image_url: newImageUrl, min_stock: newMinStock,
           initial_stock: initialStock, warehouse_id: targetWarehouse,
@@ -753,23 +762,18 @@ export default function ProductsPage() {
                 {/* SKU + Unit */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 4 }}>
                   <Field label="Mã SKU" required>
-                    {editingId ? (
-                      <FormInput
-                        ref={skuInputRef}
-                        value={newSku}
-                        onChange={e => setNewSku(e.target.value.toUpperCase())}
-                        placeholder="VD: SP-0001"
-                        style={{ fontFamily: 'monospace', fontWeight: 700 }}
-                      />
-                    ) : (
-                      <div style={{
-                        padding: '10px 14px', borderRadius: radius.md,
-                        background: colors.primarySoft, border: `1.5px solid ${colors.primaryBorder}`,
-                        color: colors.primary, fontSize: 13, fontWeight: 600,
-                      }}>
-                        Tự động sinh khi lưu
-                      </div>
-                    )}
+                    <FormInput
+                      readOnly
+                      value={editingId ? newSku : nextSku}
+                      placeholder="VD: SP-0001"
+                      style={{
+                        fontFamily: 'monospace',
+                        fontWeight: 700,
+                        background: colors.primarySoft,
+                        borderColor: colors.primaryBorder,
+                        cursor: 'default',
+                      }}
+                    />
                   </Field>
                   <Field label="Đơn vị" required>
                     <FormSelect value={newUnit} onChange={e => setNewUnit(e.target.value)}>
