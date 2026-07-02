@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import api from '../services/api';
 import { colors, spacing, radius, shadows, card, btn, input, badge, pageWrap } from '../styles/theme';
