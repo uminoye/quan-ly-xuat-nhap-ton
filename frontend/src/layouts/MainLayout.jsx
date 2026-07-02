@@ -44,19 +44,19 @@ function getRoleLabel(user) {
 
 // ── Colors ──────────────────────────────────────────────────────
 const C = {
-  sidebarBg:    '#0f1e3d',
-  sidebarWidth: 240,
-  sidebarCollapsed: 60,
-  blue:         '#1d4ed8',
-  blueMid:      '#2563eb',
-  blueSoft:     '#eff6ff',
-  blueBorder:   '#dbeafe',
-  blueLight:    '#bfdbfe',
-  white:        '#ffffff',
-  bg:           '#f1f5fb',
-  text:         '#0f172a',
-  muted:        '#94a3b8',
-  border:       '#e2e8f0',
+  sidebarBg:       '#0f1e3d',
+  sidebarWidth:    220,
+  sidebarCollapsed: 56,
+  blue:            '#1d4ed8',
+  blueMid:         '#2563eb',
+  blueSoft:        '#eff6ff',
+  blueBorder:      '#dbeafe',
+  blueLight:       '#bfdbfe',
+  white:           '#ffffff',
+  bg:              '#f1f5fb',
+  text:            '#0f172a',
+  muted:           '#94a3b8',
+  border:          '#e2e8f0',
 };
 
 export default function MainLayout() {
@@ -113,10 +113,10 @@ export default function MainLayout() {
 
         /* Tablet: collapse sidebar */
         @media (min-width: 901px) and (max-width: 1200px) {
-          .ml-sidebar  { width: 60px !important; min-width: 60px !important; }
+          .ml-sidebar  { width: 56px !important; min-width: 56px !important; }
           .ml-sidebar .ml-logo-text  { display: none !important; }
           .ml-sidebar .ml-group-lbl  { display: none !important; }
-          .ml-sidebar .ml-nav-item   { justify-content: center !important; padding: 9px 0 !important; }
+          .ml-sidebar .ml-nav-item   { justify-content: center !important; padding: 8px 0 !important; }
           .ml-sidebar .ml-nav-lbl    { display: none !important; }
           .ml-sidebar .ml-collapse-btn { justify-content: center !important; padding-left: 0 !important; }
           .ml-sidebar .ml-collapse-lbl { display: none !important; }
@@ -158,42 +158,42 @@ export default function MainLayout() {
           }}
         >
           {/* Logo */}
-          <div style={{ padding: collapsed ? '18px 10px' : '18px 16px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 28, height: 28, borderRadius: 6, background: 'rgba(255,255,255,0.1)', display: 'grid', placeItems: 'center', overflow: 'hidden', flexShrink: 0 }}>
+          <div style={{ padding: collapsed ? '14px 8px' : '14px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ width: 26, height: 26, borderRadius: 6, background: 'rgba(255,255,255,0.08)', display: 'grid', placeItems: 'center', overflow: 'hidden', flexShrink: 0 }}>
               <img src={logoSrc} alt="STEEL STOCK" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             </div>
             {!collapsed && (
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: 14, color: '#fff', letterSpacing: 0.3 }}>STEEL STOCK</div>
-                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Quản lý kho</div>
+                <div style={{ fontWeight: 700, fontSize: 13, color: '#fff', letterSpacing: 0.3 }}>STEEL STOCK</div>
+                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>Quản lý kho</div>
               </div>
             )}
           </div>
 
           {/* User info */}
           {!collapsed && (
-            <div style={{ padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ width: 34, height: 34, borderRadius: 8, background: 'rgba(37,99,235,0.3)', display: 'grid', placeItems: 'center', overflow: 'hidden', flexShrink: 0 }}>
+            <div style={{ padding: '10px 12px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 30, height: 30, borderRadius: 7, background: 'rgba(37,99,235,0.25)', display: 'grid', placeItems: 'center', overflow: 'hidden', flexShrink: 0 }}>
                   <img
-                    src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user?.full_name || 'U')}&background=1d4ed8&color=fff&bold=true&size=34`}
+                    src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user?.full_name || 'U')}&background=1d4ed8&color=fff&bold=true&size=30`}
                     alt="User avatar"
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   />
                 </div>
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#fff' }}>{user?.full_name || 'Người dùng'}</div>
-                  <div style={{ fontSize: 11, color: '#60a5fa' }}>{getRoleLabel(user)}</div>
+                  <div style={{ fontWeight: 600, fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#fff' }}>{user?.full_name || 'Người dùng'}</div>
+                  <div style={{ fontSize: 10, color: '#60a5fa' }}>{getRoleLabel(user)}</div>
                 </div>
               </div>
             </div>
           )}
 
           {/* Nav */}
-          <nav style={{ flex: 1, padding: collapsed ? '10px 6px' : '12px 8px', display: 'flex', flexDirection: 'column', gap: 2, overflowY: 'auto' }}>
+          <nav style={{ flex: 1, padding: collapsed ? '8px 4px' : '10px 6px', display: 'flex', flexDirection: 'column', gap: 1, overflowY: 'auto' }}>
             {groupedMenus.map((group) => (
-              <div key={group.title} style={{ display: 'flex', flexDirection: 'column', gap: 1, marginBottom: 6 }}>
-                {!collapsed && <div style={{ padding: '6px 10px 4px', fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.3)', letterSpacing: 0.8 }}>{group.title}</div>}
+              <div key={group.title} style={{ display: 'flex', flexDirection: 'column', gap: 1, marginBottom: 4 }}>
+                {!collapsed && <div style={{ padding: '5px 10px 3px', fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.25)', letterSpacing: 0.7 }}>{group.title}</div>}
                 {group.items.map((menu) => {
                   const meta = menuMeta[menu.path] || { label: menu.name, icon: 'ri-circle-line' };
                   const isActive = activePath === menu.path;
@@ -208,13 +208,13 @@ export default function MainLayout() {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: collapsed ? 'center' : 'flex-start',
-                        gap: collapsed ? 0 : 10,
-                        padding: collapsed ? '9px 0' : '9px 10px',
-                        borderRadius: 8,
+                        gap: collapsed ? 0 : 8,
+                        padding: collapsed ? '8px 0' : '8px 10px',
+                        borderRadius: 7,
                         textDecoration: 'none',
-                        color: isActive ? '#fff' : 'rgba(255,255,255,0.6)',
+                        color: isActive ? '#fff' : 'rgba(255,255,255,0.55)',
                         background: isActive ? '#1d4ed8' : 'transparent',
-                        transition: 'all 160ms ease',
+                        transition: 'all 150ms ease',
                       }}
                       onMouseEnter={(e) => {
                         if (isActive) return;
@@ -224,11 +224,11 @@ export default function MainLayout() {
                       onMouseLeave={(e) => {
                         if (isActive) return;
                         e.currentTarget.style.background = 'transparent';
-                        e.currentTarget.style.color = 'rgba(255,255,255,0.6)';
+                        e.currentTarget.style.color = 'rgba(255,255,255,0.55)';
                       }}
                     >
-                      <i className={meta.icon} style={{ fontSize: 16, width: 18, textAlign: 'center', flexShrink: 0 }} />
-                      {!collapsed && <span className="ml-nav-lbl" style={{ fontSize: 13, fontWeight: 500 }}>{meta.label}</span>}
+                      <i className={meta.icon} style={{ fontSize: 15, width: 18, textAlign: 'center', flexShrink: 0 }} />
+                      {!collapsed && <span className="ml-nav-lbl" style={{ fontSize: 12.5, fontWeight: 500 }}>{meta.label}</span>}
                     </Link>
                   );
                 })}
@@ -237,23 +237,23 @@ export default function MainLayout() {
           </nav>
 
           {/* Collapse toggle */}
-          <div style={{ padding: '8px 8px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <div style={{ padding: '6px 6px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
             <button
               onClick={() => setCollapsed((p) => !p)}
               className="ml-collapse-btn"
               style={{
-                width: '100%', height: 36, border: 'none', borderRadius: 8,
-                cursor: 'pointer', background: 'transparent', color: 'rgba(255,255,255,0.4)',
+                width: '100%', height: 34, border: 'none', borderRadius: 7,
+                cursor: 'pointer', background: 'transparent', color: 'rgba(255,255,255,0.35)',
                 display: 'flex', alignItems: 'center',
                 justifyContent: collapsed ? 'center' : 'flex-start',
                 gap: 8, paddingLeft: collapsed ? 0 : 10,
-                transition: 'background 160ms, color 160ms',
-                fontSize: 12, fontWeight: 500,
+                transition: 'background 150ms, color 150ms',
+                fontSize: 11, fontWeight: 500,
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = 'rgba(255,255,255,0.8)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.4)'; }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = 'rgba(255,255,255,0.7)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.35)'; }}
             >
-              <i className={collapsed ? 'ri-arrow-right-s-line' : 'ri-arrow-left-s-line'} style={{ fontSize: 16 }} />
+              <i className={collapsed ? 'ri-arrow-right-s-line' : 'ri-arrow-left-s-line'} style={{ fontSize: 15 }} />
               {!collapsed && <span className="ml-collapse-lbl">Thu gọn</span>}
             </button>
           </div>
