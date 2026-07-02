@@ -6,64 +6,20 @@ import 'remixicon/fonts/remixicon.css';
 const logoSrc = 'https://cdn.haitrieu.com/wp-content/uploads/2023/03/Logo-Truong-Cao-dang-nghe-Cong-nghe-cao-Dong-An.png';
 
 const menuGroups = [
-  { title: '1. THIẾT KẾ', items: ['/products', '/customers'] },
-  {
-    title: '2. SẢN PHẨM',
-    items: ['/products'],
-  },
-  {
-    title: '3. KHÁCH HÀNG',
-    items: ['/customers'],
-  },
-  {
-    title: '4. ĐƠN HÀNG',
-    items: ['/sales-orders'],
-  },
-  {
-    title: 'KHO',
-    items: ['/receipts', '/outbounds', '/logistics', '/returns'],
-  },
-  {
-    title: '5. PHIẾU NHẬP KHO',
-    items: ['/receipts'],
-  },
-  {
-    title: '6. PHIẾU XUẤT KHO',
-    items: ['/outbounds'],
-  },
-  {
-    title: '7. GIAO HÀNG',
-    items: ['/logistics'],
-  },
-  {
-    title: '8. XỬ LÝ HÀNG HOÀN / LỖI',
-    items: ['/returns'],
-  },
-  {
-    title: 'TỔNG QUAN',
-    items: ['/', '/sales-dashboard', '/warehouse-dashboard'],
-  },
-  {
-    title: '10. BÁO CÁO',
-    items: ['/reports'],
-  },
-  { title: 'HỆ THỐNG', items: ['/accounts'] },
+  { title: 'Dashboard', path: '/', icon: 'ri-dashboard-line' },
+  { title: 'Sản phẩm', path: '/products', icon: 'ri-box-3-line' },
+  { title: 'Khách hàng', path: '/customers', icon: 'ri-team-line' },
+  { title: 'Đơn hàng', path: '/sales-orders', icon: 'ri-shopping-cart-2-line' },
+  { title: 'Báo cáo', path: '/reports', icon: 'ri-bar-chart-box-line' },
+  { title: 'Dashboard (Admin + Kho)', path: '/admin-dashboard', icon: 'ri-admin-line' },
 ];
 
-const menuMeta = {
-  '/': { label: '9. Dashboard', icon: 'ri-line-chart-line' },
-  '/sales-dashboard': { label: 'Dashboard Sales', icon: 'ri-line-chart-line' },
-  '/warehouse-dashboard': { label: 'Tổng Quan Kho', icon: 'ri-line-chart-line' },
-  '/products': { label: '2. Sản phẩm', icon: 'ri-box-3-line' },
-  '/customers': { label: '3. Khách hàng', icon: 'ri-team-line' },
-  '/sales-orders': { label: '4. Đơn hàng', icon: 'ri-shopping-cart-2-line' },
-  '/receipts': { label: '5. Phiếu Nhập kho', icon: 'ri-inbox-archive-line' },
-  '/outbounds': { label: '6. Phiếu Xuất kho', icon: 'ri-send-plane-line' },
-  '/logistics': { label: '7. Giao hàng', icon: 'ri-truck-line' },
-  '/returns': { label: '8. Xử lý hoàn / lỗi', icon: 'ri-arrow-go-back-line' },
-  '/reports': { label: '10. Báo cáo', icon: 'ri-bar-chart-box-line' },
-  '/accounts': { label: 'Quản lý tài khoản', icon: 'ri-shield-user-line' },
-};
+const warehouseItems = [
+  { title: 'Phiếu Nhập kho', path: '/receipts', icon: 'ri-inbox-archive-line' },
+  { title: 'Phiếu Xuất kho', path: '/outbounds', icon: 'ri-send-plane-line' },
+  { title: 'Giao hàng (Logistics)', path: '/logistics', icon: 'ri-truck-line' },
+  { title: 'Xử lý hàng hoàn / lỗi', path: '/returns', icon: 'ri-arrow-go-back-line' },
+];
 
 function safeParseUser() {
   try {
@@ -102,6 +58,7 @@ export default function MainLayout() {
   const [collapsed, setCollapsed] = useState(window.innerWidth <= 1100);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [warehouseOpen, setWarehouseOpen] = useState(false);
 
   // Determine viewport layout mode and compute padding
   const { layoutMode, paddingLeft } = useMemo(() => {
@@ -123,17 +80,13 @@ export default function MainLayout() {
 
   const hasPermission = (item) => !item.roles || item.roles.includes(user?.role_id);
   const visibleMenus = MENU_ITEMS.filter(hasPermission);
-  const groupedMenus = menuGroups
-    .map((group) => ({
-      ...group,
-      items: group.items.map((path) => visibleMenus.find((item) => item.path === path)).filter(Boolean),
-    }))
-    .filter((group) => group.items.length > 0);
+  const visiblePaths = new Set(visibleMenus.map((m) => m.path));
 
   const activePath = location.pathname === '/' ? '/' : `/${location.pathname.split('/')[1]}`;
+  const isWarehouseActive = ['/receipts', '/outbounds', '/logistics', '/returns'].includes(activePath);
   const breadcrumbs = [
     { label: 'Trang chủ', path: '/' },
-    ...(activePath !== '/' ? [{ label: menuMeta[activePath]?.label || 'Trang', path: activePath }] : []),
+    ...(activePath !== '/' ? [{ label: menuGroups.find((m) => m.path === activePath)?.title || 'Trang', path: activePath }] : []),
   ];
 
   const handleLogout = () => {
@@ -262,49 +215,177 @@ export default function MainLayout() {
 
           {/* Nav */}
           <nav style={{ flex: 1, padding: collapsed ? '8px 4px' : '10px 6px', display: 'flex', flexDirection: 'column', gap: 1, overflowY: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }} className="ml-nav-scroll">
-            {groupedMenus.map((group) => (
-              <div key={group.title} style={{ display: 'flex', flexDirection: 'column', gap: 1, marginBottom: 4 }}>
-                {!collapsed && <div style={{ padding: '5px 10px 3px', fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.25)', letterSpacing: 0.7 }}>{group.title}</div>}
-                {group.items.map((menu) => {
-                  const meta = menuMeta[menu.path] || { label: menu.name, icon: 'ri-circle-line' };
-                  const isActive = activePath === menu.path;
-                  return (
-                    <Link
-                      key={menu.path}
-                      to={menu.path}
-                      title={collapsed ? meta.label : undefined}
-                      onClick={() => setMobileOpen(false)}
-                      className="ml-nav-item"
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: collapsed ? 'center' : 'flex-start',
-                        gap: collapsed ? 0 : 8,
-                        padding: collapsed ? '8px 0' : '8px 10px',
-                        borderRadius: 7,
-                        textDecoration: 'none',
-                        color: isActive ? '#fff' : 'rgba(255,255,255,0.55)',
-                        background: isActive ? '#1d4ed8' : 'transparent',
-                        transition: 'all 150ms ease',
-                      }}
-                      onMouseEnter={(e) => {
-                        if (isActive) return;
-                        e.currentTarget.style.background = 'rgba(255,255,255,0.06)';
-                        e.currentTarget.style.color = '#fff';
-                      }}
-                      onMouseLeave={(e) => {
-                        if (isActive) return;
-                        e.currentTarget.style.background = 'transparent';
-                        e.currentTarget.style.color = 'rgba(255,255,255,0.55)';
-                      }}
-                    >
-                      <i className={meta.icon} style={{ fontSize: 15, width: 18, textAlign: 'center', flexShrink: 0 }} />
-                      {!collapsed && <span className="ml-nav-lbl" style={{ fontSize: 12.5, fontWeight: 500 }}>{meta.label}</span>}
-                    </Link>
-                  );
-                })}
+            {menuGroups
+              .filter((item) => visiblePaths.has(item.path))
+              .map((item) => {
+                const isActive = activePath === item.path;
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    title={collapsed ? item.title : undefined}
+                    onClick={() => { setMobileOpen(false); setWarehouseOpen(false); }}
+                    className="ml-nav-item"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: collapsed ? 'center' : 'flex-start',
+                      gap: collapsed ? 0 : 8,
+                      padding: collapsed ? '8px 0' : '8px 10px',
+                      borderRadius: 7,
+                      textDecoration: 'none',
+                      color: isActive ? '#fff' : 'rgba(255,255,255,0.55)',
+                      background: isActive ? '#1d4ed8' : 'transparent',
+                      transition: 'all 150ms ease',
+                      fontSize: 12.5,
+                      fontWeight: 500,
+                    }}
+                    onMouseEnter={(e) => {
+                      if (isActive) return;
+                      e.currentTarget.style.background = 'rgba(255,255,255,0.06)';
+                      e.currentTarget.style.color = '#fff';
+                    }}
+                    onMouseLeave={(e) => {
+                      if (isActive) return;
+                      e.currentTarget.style.background = 'transparent';
+                      e.currentTarget.style.color = 'rgba(255,255,255,0.55)';
+                    }}
+                  >
+                    <i className={item.icon} style={{ fontSize: 15, width: 18, textAlign: 'center', flexShrink: 0 }} />
+                    {!collapsed && <span className="ml-nav-lbl">{item.title}</span>}
+                  </Link>
+                );
+              })}
+
+            {/* Kho dropdown */}
+            {!collapsed && (
+              <div>
+                <button
+                  onClick={() => setWarehouseOpen((p) => !p)}
+                  className="ml-nav-item ml-warehouse-header"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'flex-start',
+                    gap: 8,
+                    padding: '8px 10px',
+                    borderRadius: 7,
+                    textDecoration: 'none',
+                    color: isWarehouseActive ? '#fff' : 'rgba(255,255,255,0.55)',
+                    background: isWarehouseActive ? '#1d4ed8' : 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    width: '100%',
+                    transition: 'all 150ms ease',
+                    fontSize: 12.5,
+                    fontWeight: 500,
+                    fontFamily: 'inherit',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (isWarehouseActive) return;
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.06)';
+                    e.currentTarget.style.color = '#fff';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (isWarehouseActive) return;
+                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.color = 'rgba(255,255,255,0.55)';
+                  }}
+                >
+                  <i className="ri-warehouse-line" style={{ fontSize: 15, width: 18, textAlign: 'center', flexShrink: 0 }} />
+                  <span style={{ flex: 1 }}>Kho</span>
+                  <i
+                    className="ri-arrow-down-s-line"
+                    style={{
+                      fontSize: 14,
+                      transition: 'transform 200ms ease',
+                      transform: warehouseOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                      flexShrink: 0,
+                    }}
+                  />
+                </button>
+
+                {/* Sub-items */}
+                {warehouseOpen && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 1, marginTop: 2, marginBottom: 4 }}>
+                    {warehouseItems
+                      .filter((item) => visiblePaths.has(item.path))
+                      .map((item) => {
+                        const isSubActive = activePath === item.path;
+                        return (
+                          <Link
+                            key={item.path}
+                            to={item.path}
+                            onClick={() => { setMobileOpen(false); setWarehouseOpen(false); }}
+                            className="ml-nav-item"
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'flex-start',
+                              gap: 8,
+                              padding: '7px 10px 7px 36px',
+                              borderRadius: 7,
+                              textDecoration: 'none',
+                              color: isSubActive ? '#fff' : 'rgba(255,255,255,0.5)',
+                              background: isSubActive ? 'rgba(37,99,235,0.35)' : 'transparent',
+                              transition: 'all 150ms ease',
+                              fontSize: 12,
+                              fontWeight: isSubActive ? 500 : 400,
+                            }}
+                            onMouseEnter={(e) => {
+                              if (isSubActive) return;
+                              e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+                              e.currentTarget.style.color = '#fff';
+                            }}
+                            onMouseLeave={(e) => {
+                              if (isSubActive) return;
+                              e.currentTarget.style.background = 'transparent';
+                              e.currentTarget.style.color = 'rgba(255,255,255,0.5)';
+                            }}
+                          >
+                            <i className={item.icon} style={{ fontSize: 13, width: 16, textAlign: 'center', flexShrink: 0 }} />
+                            <span>{item.title}</span>
+                          </Link>
+                        );
+                      })}
+                  </div>
+                )}
               </div>
-            ))}
+            )}
+
+            {/* Kho collapsed (icon only) */}
+            {collapsed && (
+              <button
+                onClick={() => setWarehouseOpen((p) => !p)}
+                title="Kho"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 0,
+                  padding: '8px 0',
+                  borderRadius: 7,
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: isWarehouseActive ? '#fff' : 'rgba(255,255,255,0.55)',
+                  background: isWarehouseActive ? '#1d4ed8' : 'transparent',
+                  transition: 'all 150ms ease',
+                  width: '100%',
+                }}
+                onMouseEnter={(e) => {
+                  if (isWarehouseActive) return;
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.06)';
+                  e.currentTarget.style.color = '#fff';
+                }}
+                onMouseLeave={(e) => {
+                  if (isWarehouseActive) return;
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.color = 'rgba(255,255,255,0.55)';
+                }}
+              >
+                <i className="ri-warehouse-line" style={{ fontSize: 15, width: 18, textAlign: 'center' }} />
+              </button>
+            )}
           </nav>
 
           {/* Collapse toggle */}
