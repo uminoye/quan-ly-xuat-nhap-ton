@@ -95,12 +95,12 @@ export default function MainLayout() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         * { box-sizing: border-box; }
-        body { margin: 0; }
+        body { margin: 0; overflow-x: hidden; }
 
-        /* Mobile: sidebar slides in/out */
+        /* Mobile: sidebar fixed + slides in/out */
         @media (max-width: 900px) {
-          .ml-sidebar  { transform: translateX(-100%) !important; transition: transform 280ms ease !important; }
-          .ml-sidebar.open { transform: translateX(0) !important; }
+          .ml-sidebar { transform: translateX(-100%); transition: transform 280ms ease; }
+          .ml-sidebar.open { transform: translateX(0); }
           .ml-main     { width: 100% !important; }
           .ml-topbar-h { display: none !important; }
           .ml-topbar-m { display: flex !important; }
@@ -120,6 +120,12 @@ export default function MainLayout() {
           .ml-sidebar .ml-nav-lbl    { display: none !important; }
           .ml-sidebar .ml-collapse-btn { justify-content: center !important; padding-left: 0 !important; }
           .ml-sidebar .ml-collapse-lbl { display: none !important; }
+          .ml-main.with-sidebar { margin-left: 56px !important; }
+        }
+
+        /* Desktop: main content offset by sidebar width */
+        @media (min-width: 1201px) {
+          .ml-main.with-sidebar { margin-left: 220px !important; }
         }
 
         /* Overlay */
@@ -136,23 +142,24 @@ export default function MainLayout() {
       {/* Mobile overlay */}
       <div className={`ml-overlay ${mobileOpen ? 'open' : ''}`} onClick={() => setMobileOpen(false)} />
 
-      <div style={{ display: 'flex', height: '100dvh', width: '100%', fontFamily: 'Inter, system-ui, sans-serif', overflow: 'hidden' }}>
+      <div style={{ display: 'flex', minHeight: '100dvh', width: '100%', fontFamily: 'Inter, system-ui, sans-serif' }}>
 
-        {/* ── SIDEBAR ── */}
+        {/* ── SIDEBAR (fixed so it's always stable at any zoom level) ── */}
         <aside
           className={`ml-sidebar${mobileOpen ? ' open' : ''}`}
           style={{
             width: sidebarW,
             minWidth: sidebarW,
-            transition: 'width 280ms ease, min-width 280ms ease',
+            transition: 'width 280ms ease, min-width 280ms ease, transform 280ms ease',
             background: C.sidebarBg,
             color: C.white,
             display: 'flex',
             flexDirection: 'column',
-            boxShadow: '2px 0 16px rgba(0,0,0,0.2)',
+            boxShadow: '2px 0 16px rgba(0,0,0,0.25)',
             overflow: 'hidden',
             height: '100dvh',
-            position: 'sticky',
+            position: 'fixed',
+            left: 0,
             top: 0,
             zIndex: 50,
           }}
@@ -260,7 +267,7 @@ export default function MainLayout() {
         </aside>
 
         {/* ── MAIN ── */}
-        <div className="ml-main" style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, height: '100dvh', overflow: 'hidden' }}>
+        <div className="ml-main with-sidebar" style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
 
           {/* Desktop Topbar */}
           <header className="ml-topbar-h" style={{ height: 64, flexShrink: 0, background: C.white, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', boxShadow: '0 2px 18px rgba(37,99,235,0.06)', borderBottom: '1.5px solid #e0e7ff', position: 'relative', zIndex: 20 }}>
