@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { MENU_ITEMS } from '../config/menuConfig';
 import 'remixicon/fonts/remixicon.css';
@@ -62,9 +62,16 @@ const C = {
 export default function MainLayout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(window.innerWidth <= 1100);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Sync collapsed state with viewport width
+  useEffect(() => {
+    const onResize = () => setCollapsed(window.innerWidth <= 1100);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
   const user = useMemo(() => safeParseUser(), []);
 
   const hasPermission = (item) => !item.roles || item.roles.includes(user?.role_id);
