@@ -65,7 +65,6 @@ export default function MainLayout() {
   const [collapsed, setCollapsed] = useState(window.innerWidth <= 1100);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
 
   // Determine viewport layout mode and compute padding
   const { layoutMode, paddingLeft } = useMemo(() => {
