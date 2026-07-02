@@ -133,7 +133,7 @@ export default function MainLayout() {
         @media (max-width: 900px) {
           .ml-sidebar { transform: translateX(-100%); transition: transform 280ms ease; }
           .ml-sidebar.open { transform: translateX(0); }
-          .ml-main.with-sidebar { margin-left: 0 !important; }
+          .ml-main.with-sidebar { padding-left: 0 !important; }
           .ml-topbar-h { display: none !important; }
           .ml-topbar-m { display: flex !important; }
         }
@@ -145,7 +145,7 @@ export default function MainLayout() {
 
         /* Desktop: main content offset by sidebar width */
         @media (min-width: 1101px) {
-          .ml-main.with-sidebar { margin-left: 220px !important; }
+          .ml-main.with-sidebar { padding-left: 220px !important; }
         }
 
         /* Overlay */
@@ -287,7 +287,7 @@ export default function MainLayout() {
         </aside>
 
         {/* ── MAIN ── */}
-        <div className="ml-main with-sidebar" style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+        <div className="ml-main with-sidebar" style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden', paddingLeft: sidebarW, transition: 'padding-left 280ms ease' }}>
 
           {/* Desktop Topbar */}
           <header className="ml-topbar-h" style={{ height: 64, flexShrink: 0, background: C.white, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', boxShadow: '0 2px 18px rgba(37,99,235,0.06)', borderBottom: '1.5px solid #e0e7ff', position: 'relative', zIndex: 20 }}>
