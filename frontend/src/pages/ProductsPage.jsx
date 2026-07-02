@@ -764,7 +764,7 @@ export default function ProductsPage() {
                   <Field label="Mã SKU" required>
                     <FormInput
                       readOnly
-                      value={editingId ? newSku : nextSku}
+                      value={editingId !== null ? newSku : nextSku}
                       placeholder="VD: SP-0001"
                       style={{
                         fontFamily: 'monospace',
