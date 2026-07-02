@@ -293,16 +293,7 @@ export default function MainLayout() {
                   }}
                 >
                   <i className="ri-warehouse-line" style={{ fontSize: 15, width: 18, textAlign: 'center', flexShrink: 0 }} />
-                  <span style={{ flex: 1 }}>Kho</span>
-                  <i
-                    className="ri-arrow-down-s-line"
-                    style={{
-                      fontSize: 14,
-                      transition: 'transform 200ms ease',
-                      transform: warehouseOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                      flexShrink: 0,
-                    }}
-                  />
+                  <span>Kho</span>
                 </button>
 
                 {/* Sub-items */}
