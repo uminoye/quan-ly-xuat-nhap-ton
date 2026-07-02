@@ -45,8 +45,8 @@ function getRoleLabel(user) {
 // ── Colors ──────────────────────────────────────────────────────
 const C = {
   sidebarBg:       '#0f1e3d',
-  sidebarWidth:    220,
-  sidebarCollapsed: 56,
+  sidebarWidth:    200,
+  sidebarCollapsed: 52,
   blue:            '#1d4ed8',
   blueMid:         '#2563eb',
   blueSoft:        '#eff6ff',
@@ -70,8 +70,8 @@ export default function MainLayout() {
   const { layoutMode, paddingLeft } = useMemo(() => {
     const w = window.innerWidth;
     if (w <= 900)  return { layoutMode: 'mobile',  paddingLeft: 0 };
-    if (w <= 1100) return { layoutMode: 'tablet',  paddingLeft: 56 };
-    return              { layoutMode: 'desktop', paddingLeft: collapsed ? 56 : 220 };
+    if (w <= 1100) return { layoutMode: 'tablet',  paddingLeft: C.sidebarCollapsed };
+    return              { layoutMode: 'desktop', paddingLeft: collapsed ? C.sidebarCollapsed : C.sidebarWidth };
   }, [collapsed]);
 
   // Sync collapsed state when viewport changes (keeps state in sync)
@@ -136,7 +136,7 @@ export default function MainLayout() {
         @media (min-width: 901px) and (max-width: 1100px) {
           .ml-sidebar .ml-logo-text  { display: none !important; }
           .ml-sidebar .ml-group-lbl  { display: none !important; }
-          .ml-sidebar .ml-nav-item   { justify-content: center !important; }
+          .ml-sidebar .ml-nav-item   { justify-content: center !important; padding: 7px 0 !important; }
           .ml-sidebar .ml-nav-lbl    { display: none !important; }
           .ml-sidebar .ml-collapse-btn { justify-content: center !important; padding-left: 0 !important; }
           .ml-sidebar .ml-collapse-lbl { display: none !important; }
@@ -175,8 +175,8 @@ export default function MainLayout() {
         <aside
           className={`ml-sidebar${mobileOpen ? ' open' : ''}`}
           style={{
-            width: layoutMode === 'mobile' ? (mobileOpen ? 220 : 0) : layoutMode === 'tablet' ? 56 : (collapsed ? 56 : 220),
-            minWidth: layoutMode === 'mobile' ? (mobileOpen ? 220 : 0) : layoutMode === 'tablet' ? 56 : (collapsed ? 56 : 220),
+            width: layoutMode === 'mobile' ? (mobileOpen ? C.sidebarWidth : 0) : layoutMode === 'tablet' ? C.sidebarCollapsed : (collapsed ? C.sidebarCollapsed : C.sidebarWidth),
+            minWidth: layoutMode === 'mobile' ? (mobileOpen ? C.sidebarWidth : 0) : layoutMode === 'tablet' ? C.sidebarCollapsed : (collapsed ? C.sidebarCollapsed : C.sidebarWidth),
             transition: 'width 280ms ease, min-width 280ms ease, transform 280ms ease',
             background: C.sidebarBg,
             color: C.white,
@@ -192,13 +192,13 @@ export default function MainLayout() {
           }}
         >
           {/* Logo */}
-          <div style={{ padding: collapsed ? '14px 8px' : '14px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ width: 26, height: 26, borderRadius: 6, background: 'rgba(255,255,255,0.08)', display: 'grid', placeItems: 'center', overflow: 'hidden', flexShrink: 0 }}>
+          <div style={{ padding: collapsed ? '12px 6px' : '12px 10px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: 7 }}>
+            <div style={{ width: 24, height: 24, borderRadius: 5, background: 'rgba(255,255,255,0.08)', display: 'grid', placeItems: 'center', overflow: 'hidden', flexShrink: 0 }}>
               <img src={logoSrc} alt="STEEL STOCK" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             </div>
             {!collapsed && (
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: 13, color: '#fff', letterSpacing: 0.3 }}>STEEL STOCK</div>
+                <div style={{ fontWeight: 700, fontSize: 12, color: '#fff', letterSpacing: 0.3 }}>STEEL STOCK</div>
                 <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>Quản lý kho</div>
               </div>
             )}
@@ -206,17 +206,17 @@ export default function MainLayout() {
 
           {/* User info */}
           {!collapsed && (
-            <div style={{ padding: '10px 12px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+            <div style={{ padding: '8px 10px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 30, height: 30, borderRadius: 7, background: 'rgba(37,99,235,0.25)', display: 'grid', placeItems: 'center', overflow: 'hidden', flexShrink: 0 }}>
+                <div style={{ width: 28, height: 28, borderRadius: 6, background: 'rgba(37,99,235,0.25)', display: 'grid', placeItems: 'center', overflow: 'hidden', flexShrink: 0 }}>
                   <img
-                    src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user?.full_name || 'U')}&background=1d4ed8&color=fff&bold=true&size=30`}
+                    src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user?.full_name || 'U')}&background=1d4ed8&color=fff&bold=true&size=28`}
                     alt="User avatar"
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   />
                 </div>
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#fff' }}>{user?.full_name || 'Người dùng'}</div>
+                  <div style={{ fontWeight: 600, fontSize: 11, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#fff' }}>{user?.full_name || 'Người dùng'}</div>
                   <div style={{ fontSize: 10, color: '#60a5fa' }}>{getRoleLabel(user)}</div>
                 </div>
               </div>
