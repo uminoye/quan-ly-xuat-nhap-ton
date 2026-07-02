@@ -149,19 +149,39 @@ const updateProduct = async (req, res) => {
 };
 
 const deleteProduct = async (req, res) => {
+    const client = await db.pool.connect();
     try {
         const { id } = req.params;
-        const row = await db.getOne(`SELECT COALESCE(SUM(on_hand_qty), 0) AS total_stock FROM inventory_balances WHERE product_id = $1`, [id]);
-        const totalStock = Number(row?.total_stock || 0);
+
+        let totalStock = 0;
+        const stockResult = await client.query(
+            `SELECT COALESCE(SUM(on_hand_qty), 0)::int AS total_stock FROM inventory_balances WHERE product_id = $1`,
+            [id]
+        );
+        totalStock = Number(stockResult.rows[0]?.total_stock || 0);
+
         if (totalStock > 0) {
+            client.release();
             return res.status(400).json({ message: 'Khong the xoa san pham vi van con ton kho!' });
         }
-        const result = await db.run(`DELETE FROM products WHERE id = $1`, [id]);
+
+        await client.query('BEGIN');
+        await client.query(`DELETE FROM inventory_balances WHERE product_id = $1`, [id]);
+        const result = await client.query(`DELETE FROM products WHERE id = $1`, [id]);
+        await client.query('COMMIT');
+
         if (result.rowCount === 0) {
+            client.release();
             return res.status(404).json({ message: 'Khong tim thay san pham can xoa' });
         }
+        client.release();
         res.status(200).json({ message: 'Xoa san pham thanh cong' });
     } catch (err) {
+        try { await client.query('ROLLBACK'); } catch (_) {}
+        client.release();
+        if (err.code === '23503') {
+            return res.status(400).json({ message: 'San pham dang duoc su dung trong don hang hoac phieu, khong the xoa!' });
+        }
         res.status(500).json({ message: 'Loi khi xoa san pham', error: err.message });
     }
 };
