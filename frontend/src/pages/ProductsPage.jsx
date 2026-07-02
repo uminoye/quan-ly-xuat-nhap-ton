@@ -313,6 +313,7 @@ export default function ProductsPage() {
   // ---- Actions ----
   const openAddModal = () => {
     setEditingId(null);
+    setNewSku('');
     setNewName(''); setNewPrice(''); setNewUnit('Cái');
     setNewCategory(''); setNewImageUrl(''); setNewMinStock('50');
     setInitialStock(0); setTargetWarehouse('all');
