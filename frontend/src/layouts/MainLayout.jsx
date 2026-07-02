@@ -6,25 +6,62 @@ import 'remixicon/fonts/remixicon.css';
 const logoSrc = 'https://cdn.haitrieu.com/wp-content/uploads/2023/03/Logo-Truong-Cao-dang-nghe-Cong-nghe-cao-Dong-An.png';
 
 const menuGroups = [
-  { title: 'TỔNG QUAN', items: ['/', '/sales-dashboard', '/warehouse-dashboard'] },
+  { title: '1. THIẾT KẾ', items: ['/products', '/customers'] },
   {
-    title: 'NGHIỆP VỤ',
-    items: ['/products', '/receipts', '/outbounds', '/sales-orders', '/logistics', '/reports', '/customers'],
+    title: '2. SẢN PHẨM',
+    items: ['/products'],
+  },
+  {
+    title: '3. KHÁCH HÀNG',
+    items: ['/customers'],
+  },
+  {
+    title: '4. ĐƠN HÀNG',
+    items: ['/sales-orders'],
+  },
+  {
+    title: 'KHO',
+    items: ['/receipts', '/outbounds', '/logistics', '/returns'],
+  },
+  {
+    title: '5. PHIẾU NHẬP KHO',
+    items: ['/receipts'],
+  },
+  {
+    title: '6. PHIẾU XUẤT KHO',
+    items: ['/outbounds'],
+  },
+  {
+    title: '7. GIAO HÀNG',
+    items: ['/logistics'],
+  },
+  {
+    title: '8. XỬ LÝ HÀNG HOÀN / LỖI',
+    items: ['/returns'],
+  },
+  {
+    title: 'TỔNG QUAN',
+    items: ['/', '/sales-dashboard', '/warehouse-dashboard'],
+  },
+  {
+    title: '10. BÁO CÁO',
+    items: ['/reports'],
   },
   { title: 'HỆ THỐNG', items: ['/accounts'] },
 ];
 
 const menuMeta = {
-  '/': { label: 'Dashboard', icon: 'ri-line-chart-line' },
+  '/': { label: '9. Dashboard', icon: 'ri-line-chart-line' },
   '/sales-dashboard': { label: 'Dashboard Sales', icon: 'ri-line-chart-line' },
   '/warehouse-dashboard': { label: 'Tổng Quan Kho', icon: 'ri-line-chart-line' },
-  '/products': { label: 'Quản lý sản phẩm', icon: 'ri-box-3-line' },
-  '/receipts': { label: 'Nhập kho', icon: 'ri-inbox-line' },
-  '/outbounds': { label: 'Xuất kho', icon: 'ri-send-plane-line' },
-  '/sales-orders': { label: 'Quản lý đơn hàng', icon: 'ri-shopping-cart-2-line' },
-  '/logistics': { label: 'Tiếp nhận giao hàng', icon: 'ri-truck-line' },
-  '/reports': { label: 'Báo cáo', icon: 'ri-bar-chart-box-line' },
-  '/customers': { label: 'Khách Hàng', icon: 'ri-team-line' },
+  '/products': { label: '2. Sản phẩm', icon: 'ri-box-3-line' },
+  '/customers': { label: '3. Khách hàng', icon: 'ri-team-line' },
+  '/sales-orders': { label: '4. Đơn hàng', icon: 'ri-shopping-cart-2-line' },
+  '/receipts': { label: '5. Phiếu Nhập kho', icon: 'ri-inbox-archive-line' },
+  '/outbounds': { label: '6. Phiếu Xuất kho', icon: 'ri-send-plane-line' },
+  '/logistics': { label: '7. Giao hàng', icon: 'ri-truck-line' },
+  '/returns': { label: '8. Xử lý hoàn / lỗi', icon: 'ri-arrow-go-back-line' },
+  '/reports': { label: '10. Báo cáo', icon: 'ri-bar-chart-box-line' },
   '/accounts': { label: 'Quản lý tài khoản', icon: 'ri-shield-user-line' },
 };
 

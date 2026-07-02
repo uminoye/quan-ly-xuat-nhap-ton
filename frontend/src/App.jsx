@@ -12,6 +12,7 @@ import ReportsPage from './pages/ReportsPage';
 import MyDashboardPage from './pages/MyDashboardPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
 import WarehouseDashboardPage from './pages/WarehouseDashboardPage';
+import ReturnsPage from './pages/ReturnsPage';
 
 // 1. Kiểm tra đăng nhập
 const ProtectedRoute = ({ children }) => {
@@ -67,11 +68,14 @@ export default function App() {
           <Route path="customers" element={<CustomersPage />} />
           <Route path="accounts" element={<AccountsPage />} />
 
-          {/* --- NGHIỆP VỤ --- */}
-          <Route path="sales-orders" element={<SalesOrdersPage />} />
-          <Route path="logistics" element={<LogisticsPage />} />
+          {/* --- NGHIỆP VỤ KHO --- */}
           <Route path="receipts" element={<ReceiptsPage />} />
           <Route path="outbounds" element={<OutboundsPage />} />
+          <Route path="logistics" element={<LogisticsPage />} />
+          <Route path="returns" element={<ReturnsPage />} />
+
+          {/* --- ĐƠN HÀNG --- */}
+          <Route path="sales-orders" element={<SalesOrdersPage />} />
           
           {/* --- BÁO CÁO --- */}
           <Route path="reports" element={<ReportsPage />} />
