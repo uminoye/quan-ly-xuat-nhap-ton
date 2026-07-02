@@ -400,16 +400,6 @@ export default function ProductsPage() {
     }
   };
 
-  const handleResetProducts = async () => {
-    if (!window.confirm('Xóa toàn bộ sản phẩm và SKU? Hành động này không thể hoàn tác.')) return;
-    try {
-      await api.delete('/products/reset');
-      fetchData();
-    } catch (error) {
-      alert(error.response?.data?.message || 'Lỗi khi reset sản phẩm');
-    }
-  };
-
   const isFiltered = viewFilter !== 'all' || filterMode !== 'all' || searchText.trim();
 
   return (
@@ -462,9 +452,6 @@ export default function ProductsPage() {
                 </button>
                 <button onClick={openAddModal} style={btn('primary', 'md')}>
                   <IconPlus /> Thêm sản phẩm
-                </button>
-                <button onClick={handleResetProducts} style={{ ...btn('danger', 'md'), marginLeft: 8 }}>
-                  Reset
                 </button>
               </>
             )}
