@@ -3,19 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import ExcelJS from 'exceljs';
 import { getDashboardStats } from '../services/reportService';
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as RechartsTooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
+  ResponsiveContainer, PieChart, Pie, Cell,
 } from 'recharts';
 
-const ACCENT_COLORS = ['#10B981', '#3B82F6', '#F59E0B', '#8B5CF6', '#EC4899'];
+const ACCENT_COLORS = ['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#0ea5e9'];
 
 const formatCurrency = (value) => new Intl.NumberFormat('vi-VN').format(value || 0);
 const formatDate = (value) => (value ? new Date(value).toLocaleDateString('vi-VN') : '--');
@@ -29,50 +21,60 @@ const safeArray = (value) => (Array.isArray(value) ? value : []);
 const formatExcelCurrency = (value) => Number(value || 0);
 
 const statIcons = {
-  revenue: (<svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ width: '22px', height: '22px' }}><path d="M12 2v20M17 6.5c0-1.93-2.24-3.5-5-3.5S7 4.57 7 6.5 9.24 10 12 10s5 1.57 5 3.5S14.76 17 12 17s-5-1.57-5-3.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>),
-  stock: (<svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ width: '22px', height: '22px' }}><path d="M4 7.5 12 4l8 3.5-8 3.5-8-3.5Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /><path d="M4 7.5V16.5L12 20l8-3.5V7.5" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /></svg>),
-  processing: (<svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ width: '22px', height: '22px' }}><path d="M12 7v5l3 3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /><circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.8" /></svg>),
-  alert: (<svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ width: '22px', height: '22px' }}><path d="m10.29 4.86-7.43 12.8A2 2 0 0 0 4.58 21h14.84a2 2 0 0 0 1.72-3.34l-7.43-12.8a2 2 0 0 0-3.44 0Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /><path d="M12 9v4" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" /><path d="M12 17h.01" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /></svg>),
+  revenue:    (<svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ width: 22, height: 22 }}><path d="M12 2v20M17 6.5c0-1.93-2.24-3.5-5-3.5S7 4.57 7 6.5 9.24 10 12 10s5 1.57 5 3.5S14.76 17 12 17s-5-1.57-5-3.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>),
+  stock:      (<svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ width: 22, height: 22 }}><path d="M4 7.5 12 4l8 3.5-8 3.5-8-3.5Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /><path d="M4 7.5V16.5L12 20l8-3.5V7.5" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /></svg>),
+  processing: (<svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ width: 22, height: 22 }}><path d="M12 7v5l3 3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /><circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.8" /></svg>),
+  alert:     (<svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ width: 22, height: 22 }}><path d="m10.29 4.86-7.43 12.8A2 2 0 0 0 4.58 21h14.84a2 2 0 0 0 1.72-3.34l-7.43-12.8a2 2 0 0 0-3.44 0Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /><path d="M12 9v4M12 17h.01" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" /></svg>),
 };
 
 const statusMeta = {
-  completed: { label: 'Hoàn tất', bg: '#DCFCE7', color: '#166534' },
-  pending: { label: 'Chờ xử lý', bg: '#FEF3C7', color: '#92400E' },
-  warehouse_processing: { label: 'Đang xử lý', bg: '#DBEAFE', color: '#1D4ED8' },
-  rejected: { label: 'Từ chối', bg: '#FEE2E2', color: '#B91C1C' },
-  delayed: { label: 'Dời ngày', bg: '#FFEDD5', color: '#C2410C' },
-  returned: { label: 'Hoàn trả', bg: '#F3E8FF', color: '#7C3AED' },
+  completed:            { label: 'Hoàn tất',       bg: '#dbeafe', color: '#1d4ed8' },
+  pending:              { label: 'Chờ xử lý',      bg: '#fef3c7', color: '#92400e' },
+  warehouse_processing:  { label: 'Đang xử lý',    bg: '#dbeafe', color: '#1d4ed8' },
+  rejected:             { label: 'Từ chối',        bg: '#fee2e2', color: '#b91c1c' },
+  delayed:              { label: 'Dời ngày',       bg: '#ffedd5', color: '#c2410c' },
+  returned:             { label: 'Hoàn trả',        bg: '#f3e8ff', color: '#7c3aed' },
 };
 
-function StatButtonCard({ label, value, hint, icon, accent, hoverColor, hovered, onMouseEnter, onMouseLeave }) {
+// ── Shared card style ────────────────────────────────────────────
+const cardBase = {
+  background: '#fff',
+  borderRadius: 20,
+  padding: 20,
+  border: '1px solid #e0e7ff',
+  boxShadow: '0 10px 30px rgba(37,99,235,0.06)',
+};
+
+function StatCard({ label, value, hint, icon, accent, hovered, onMouseEnter, onMouseLeave }) {
   return (
     <div
-      className="dashboard-hover-card dashboard-stat-card"
+      className="stat-card"
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       style={{
-        background: hovered ? 'linear-gradient(180deg, #FFFDF6 0%, #FFFFFF 100%)' : '#fff',
-        borderRadius: 20,
-        padding: 20,
-        boxShadow: hovered ? '0 18px 40px rgba(15, 23, 42, 0.12)' : '0 10px 30px rgba(15, 23, 42, 0.06)',
-        border: hovered ? `1px solid ${hoverColor}` : '1px solid #EEF2F7',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 14,
-        textAlign: 'left',
-        width: '100%',
-        transition: 'transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease',
+        ...cardBase,
+        background: hovered ? 'linear-gradient(160deg, #eff6ff 0%, #fff 100%)' : '#fff',
+        boxShadow: hovered ? '0 18px 40px rgba(37,99,235,0.14)' : '0 10px 30px rgba(37,99,235,0.06)',
+        border: hovered ? `1.5px solid ${accent}` : '1px solid #e0e7ff',
+        transition: 'all 220ms ease',
         transform: hovered ? 'translateY(-4px)' : 'translateY(0)',
         cursor: 'default',
       }}
     >
-      <div style={{ width: 46, height: 46, borderRadius: 14, background: accent, color: '#fff', display: 'grid', placeItems: 'center', transition: 'transform 0.2s ease, background 0.2s ease', overflow: 'hidden', boxShadow: hovered ? '0 10px 20px rgba(15, 23, 42, 0.12)' : 'none' }}>
+      <div style={{
+        width: 46, height: 46, borderRadius: 14,
+        background: accent, color: '#fff',
+        display: 'grid', placeItems: 'center',
+        transition: 'transform 220ms ease',
+        transform: hovered ? 'scale(1.08)' : 'scale(1)',
+        flexShrink: 0,
+      }}>
         {icon}
       </div>
       <div>
-        <div style={{ fontSize: 13, color: hovered ? '#0F172A' : '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: hovered ? '0.02em' : '0' }}>{label}</div>
-        <div style={{ fontSize: 30, fontWeight: 800, color: '#0F172A', marginTop: 6 }}>{value}</div>
-        {hint ? <div style={{ fontSize: 12, color: hovered ? '#475569' : '#94A3B8', marginTop: 6 }}>{hint}</div> : null}
+        <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8' }}>{label}</div>
+        <div style={{ fontSize: 28, fontWeight: 800, color: '#0f172a', marginTop: 6, lineHeight: 1.1 }}>{value}</div>
+        {hint ? <div style={{ fontSize: 12, color: '#64748b', marginTop: 5 }}>{hint}</div> : null}
       </div>
     </div>
   );
@@ -80,20 +82,10 @@ function StatButtonCard({ label, value, hint, icon, accent, hoverColor, hovered,
 
 function SectionCard({ title, subtitle, children }) {
   return (
-    <div
-      className="dashboard-hover-card"
-      style={{
-        background: '#fff',
-        borderRadius: 24,
-        padding: 20,
-        border: '1px solid #EEF2F7',
-        boxShadow: '0 18px 42px rgba(15, 23, 42, 0.10)',
-        transition: 'transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease',
-      }}
-    >
+    <div style={{ ...cardBase }}>
       <div style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 18, fontWeight: 800, color: '#0F172A' }}>{title}</div>
-        {subtitle ? <div style={{ fontSize: 13, color: '#64748B', marginTop: 4 }}>{subtitle}</div> : null}
+        <div style={{ fontSize: 17, fontWeight: 800, color: '#0f172a' }}>{title}</div>
+        {subtitle ? <div style={{ fontSize: 13, color: '#94a3b8', marginTop: 4 }}>{subtitle}</div> : null}
       </div>
       {children}
     </div>
@@ -114,22 +106,16 @@ export default function AdminDashboardPage() {
         const res = await getDashboardStats();
         setDashboard(res || {});
       } catch (err) {
-        setError(`Không thể tải dữ liệu dashboard từ API tổng hợp. ${err?.response?.data?.message || err.message || ''}`.trim());
+        setError(`Không thể tải dữ liệu dashboard. ${err?.response?.data?.message || err.message || ''}`.trim());
       } finally {
         setLoading(false);
       }
     };
-
-    const runEnterAnimation = () => {
-      setPageLoaded(false);
-      requestAnimationFrame(() => requestAnimationFrame(() => setPageLoaded(true)));
-    };
-
+    const run = () => { setPageLoaded(false); requestAnimationFrame(() => requestAnimationFrame(() => setPageLoaded(true))); };
     fetchAllData();
-    runEnterAnimation();
-
-    window.addEventListener('pageshow', runEnterAnimation);
-    return () => window.removeEventListener('pageshow', runEnterAnimation);
+    run();
+    window.addEventListener('pageshow', run);
+    return () => window.removeEventListener('pageshow', run);
   }, []);
 
   const totalRevenue = dashboard?.total_revenue || 0;
@@ -138,64 +124,23 @@ export default function AdminDashboardPage() {
   const processingOrdersCount = dashboard?.processing_orders || 0;
   const recentOrders = safeArray(dashboard?.recent_orders);
   const recentActivities = safeArray(dashboard?.recent_activities);
-  const monthlyImportExportData = safeArray(dashboard?.monthly_import_export).map((item) => ({ name: formatMonthLabel(item.name), Nhập: item.Nhập || 0, Xuất: item.Xuất || 0 }));
-  const revenueTrend = safeArray(dashboard?.revenue_trend).map((item) => ({ name: formatMonthLabel(item.month), month: item.month, DoanhThu: item.revenue || 0 }));
+  const monthlyImportExportData = safeArray(dashboard?.monthly_import_export).map((item) => ({
+    name: formatMonthLabel(item.name), Nhập: item.Nhập || 0, Xuất: item.Xuất || 0,
+  }));
+  const revenueTrend = safeArray(dashboard?.revenue_trend).map((item) => ({
+    name: formatMonthLabel(item.month), month: item.month, DoanhThu: item.revenue || 0,
+  }));
   const topProductsData = safeArray(dashboard?.top_selling_products).map((item) => ({ name: item.name, value: item.value || 0 }));
-  const completedOrderCount = recentOrders.filter((order) => order.status === 'completed').length;
+  const completedOrderCount = recentOrders.filter((o) => o.status === 'completed').length;
   const lastUpdatedText = getTodayTimestamp();
 
-  const dashboardOverviewRows = [
-    ['BÁO CÁO DASHBOARD ADMIN', ''],
-    ['Cập nhật lúc', lastUpdatedText],
-    ['Tổng doanh thu', formatExcelCurrency(totalRevenue)],
-    ['Tổng sản phẩm trong kho', formatExcelCurrency(totalStock)],
-    ['Đơn đang xử lý', formatExcelCurrency(processingOrdersCount)],
-    ['Sản phẩm sắp hết', formatExcelCurrency(lowStockCount)],
-    ['Đơn hoàn tất gần nhất', formatExcelCurrency(completedOrderCount)],
-  ];
-  const reportMetadataRows = [
-    ['Mục', 'Giá trị'],
-    ['Dashboard', 'Admin tổng quan'],
-    ['Nguồn dữ liệu', 'API /reports/dashboard'],
-    ['Cập nhật lúc', lastUpdatedText],
-  ];
-  const inventorySummaryRows = monthlyImportExportData.map((item) => [item.name, item.Nhập, item.Xuất]);
-  const revenueRows = revenueTrend.map((item) => [item.name, item.DoanhThu]);
-  const recentOrdersRows = recentOrders.map((order) => [order.order_no || order.id || '-', order.customer_name || '-', statusMeta[order.status]?.label || order.status || 'Không rõ', formatDate(order.expected_delivery_date), order.completed_at ? formatDate(order.completed_at) : '--']);
-  const recentActivitiesRows = recentActivities.map((activity) => [activity.type || '-', activity.code || activity.reference_no || activity.order_no || 'N/A', activity.warehouse_name || '-', formatDate(activity.activity_date), activity.status || 'logged']);
-  const topProductsRows = topProductsData.map((item, index) => [index + 1, item.name, item.value]);
   const handleExportReport = async () => {
     const workbook = new ExcelJS.Workbook();
-    workbook.creator = 'Inventory Management';
-    workbook.created = new Date();
-    workbook.modified = new Date();
-    workbook.company = 'Admin Dashboard';
-    workbook.subject = 'Báo cáo tổng quan dashboard';
-    workbook.title = 'Báo cáo dashboard';
+    workbook.creator = 'STEEL STOCK'; workbook.created = new Date();
+    workbook.modified = new Date(); workbook.company = 'STEEL STOCK';
+    workbook.title = 'Báo cáo dashboard'; workbook.subject = 'Dashboard Admin';
 
-    const applySheetBase = (sheet, title, subtitle) => {
-      sheet.mergeCells('A1:F1');
-      sheet.getCell('A1').value = title;
-      sheet.getCell('A1').font = { bold: true, size: 16, color: { argb: 'FFFFFFFF' } };
-      sheet.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
-      sheet.getCell('A1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
-      sheet.mergeCells('A2:F2');
-      sheet.getCell('A2').value = subtitle;
-      sheet.getCell('A2').font = { italic: true, size: 10, color: { argb: 'FFD1D5DB' } };
-      sheet.getCell('A2').alignment = { horizontal: 'center', vertical: 'middle' };
-      sheet.getCell('A2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
-    };
-
-    const styleHeaders = (sheet, rowNumber = 4) => {
-      const row = sheet.getRow(rowNumber);
-      row.eachCell((cell) => {
-        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2563EB' } };
-        cell.alignment = { horizontal: 'center', vertical: 'middle' };
-      });
-    };
-
-    const applyBorders = (sheet) => {
+    const styleSheet = (sheet) => {
       sheet.eachRow((row, rowNumber) => {
         row.eachCell((cell) => {
           cell.border = { top: { style: 'thin', color: { argb: 'FFE2E8F0' } }, left: { style: 'thin', color: { argb: 'FFE2E8F0' } }, bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } }, right: { style: 'thin', color: { argb: 'FFE2E8F0' } } };
@@ -204,155 +149,155 @@ export default function AdminDashboardPage() {
       });
     };
 
-    const overviewSheet = workbook.addWorksheet('Tong quan');
-    applySheetBase(overviewSheet, 'BÁO CÁO DASHBOARD ADMIN', `Cập nhật lúc: ${lastUpdatedText}`);
-    overviewSheet.columns = [{ width: 28 }, { width: 22 }];
-    overviewSheet.addRow(['Chỉ số', 'Giá trị']);
-    dashboardOverviewRows.slice(1).forEach(([label, value]) => overviewSheet.addRow([label, value]));
-    overviewSheet.getColumn(2).numFmt = '#,##0';
-    styleHeaders(overviewSheet, 4);
-    applyBorders(overviewSheet);
+    const titleRow = (sheet, rowNum, title, subtitle) => {
+      sheet.mergeCells(`A${rowNum}:F${rowNum}`);
+      sheet.getCell(`A${rowNum}`).value = title;
+      sheet.getCell(`A${rowNum}`).font = { bold: true, size: 16, color: { argb: 'FFFFFFFF' } };
+      sheet.getCell(`A${rowNum}`).alignment = { horizontal: 'center', vertical: 'middle' };
+      sheet.getCell(`A${rowNum}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2563eb' } };
+    };
 
-    const metadataSheet = workbook.addWorksheet('Thong tin');
-    applySheetBase(metadataSheet, 'THÔNG TIN BÁO CÁO', 'Nguồn dữ liệu và phạm vi xuất file');
-    metadataSheet.columns = [{ width: 26 }, { width: 30 }];
-    metadataSheet.addRows(reportMetadataRows);
-    styleHeaders(metadataSheet, 4);
-    applyBorders(metadataSheet);
+    const headerRow = (sheet, rowNum, headers) => {
+      headers.forEach((h, i) => { const c = sheet.getCell(`${String.fromCharCode(65 + i)}${rowNum}`); c.value = h; c.font = { bold: true, color: { argb: 'FFFFFFFF' } }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1d4ed8' } }; c.alignment = { horizontal: 'center', vertical: 'middle' }; });
+    };
 
-    const revenueSheet = workbook.addWorksheet('Doanh thu');
-    applySheetBase(revenueSheet, 'XU HƯỚNG DOANH THU', `Dữ liệu theo tháng - ${reportMonthLabel}`);
-    revenueSheet.columns = [{ width: 16 }, { width: 18 }];
-    revenueSheet.addRow(['Tháng', 'Doanh thu']);
-    revenueRows.forEach(([month, revenue]) => revenueSheet.addRow([month, revenue]));
-    revenueSheet.getColumn(2).numFmt = '#,##0';
-    styleHeaders(revenueSheet, 4);
-    applyBorders(revenueSheet);
+    const s1 = workbook.addWorksheet('Tong quan');
+    titleRow(s1, 1, 'BÁO CÁO DASHBOARD ADMIN', `Cập nhật: ${lastUpdatedText}`);
+    s1.mergeCells('A2:B2'); s1.getCell('A2').value = 'STEEL STOCK'; s1.getCell('A2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2563eb' } };
+    s1.columns = [{ width: 30 }, { width: 22 }]; s1.addRows([['Chỉ số', 'Giá trị'], ...[
+      ['Tổng doanh thu', formatExcelCurrency(totalRevenue)], ['Tổng sản phẩm', formatExcelCurrency(totalStock)],
+      ['Đơn đang xử lý', formatExcelCurrency(processingOrdersCount)], ['Sản phẩm sắp hết', formatExcelCurrency(lowStockCount)],
+    ]]); s1.getColumn(2).numFmt = '#,##0'; headerRow(s1, 3, ['Chỉ số', 'Giá trị']); styleSheet(s1);
 
-    const inventorySheet = workbook.addWorksheet('Nhap xuat');
-    applySheetBase(inventorySheet, 'NHẬP XUẤT KHO', `Tổng hợp nhập xuất theo tháng - ${reportMonthLabel}`);
-    inventorySheet.columns = [{ width: 16 }, { width: 14 }, { width: 14 }];
-    inventorySheet.addRow(['Tháng', 'Nhập', 'Xuất']);
-    inventorySummaryRows.forEach(([month, importQty, exportQty]) => inventorySheet.addRow([month, importQty, exportQty]));
-    inventorySheet.getColumn(2).numFmt = '#,##0';
-    inventorySheet.getColumn(3).numFmt = '#,##0';
-    styleHeaders(inventorySheet, 4);
-    applyBorders(inventorySheet);
+    const s2 = workbook.addWorksheet('Nhap xuat');
+    titleRow(s2, 1, 'NHẬP XUẤT THEO THÁNG', 'Dữ liệu từ dashboard');
+    s2.columns = [{ width: 16 }, { width: 14 }, { width: 14 }];
+    s2.addRows([['Tháng', 'Nhập', 'Xuất'], ...monthlyImportExportData.map(i => [i.name, i.Nhập, i.Xuất])]);
+    s2.getColumn(2).numFmt = '#,##0'; s2.getColumn(3).numFmt = '#,##0';
+    headerRow(s2, 3, ['Tháng', 'Nhập', 'Xuất']); styleSheet(s2);
 
-    const topProductsSheet = workbook.addWorksheet('San pham ban chay');
-    applySheetBase(topProductsSheet, 'SẢN PHẨM BÁN CHẠY', 'Top sản phẩm được bán nhiều nhất');
-    topProductsSheet.columns = [{ width: 10 }, { width: 30 }, { width: 14 }];
-    topProductsSheet.addRow(['Top', 'Sản phẩm', 'Số lượng']);
-    topProductsRows.forEach(([rank, name, value]) => topProductsSheet.addRow([rank, name, value]));
-    topProductsSheet.getColumn(3).numFmt = '#,##0';
-    styleHeaders(topProductsSheet, 4);
-    applyBorders(topProductsSheet);
+    const s3 = workbook.addWorksheet('San pham');
+    titleRow(s3, 1, 'SẢN PHẨM BÁN CHẠY', 'Top sản phẩm');
+    s3.columns = [{ width: 8 }, { width: 32 }, { width: 14 }];
+    s3.addRows([['Top', 'Sản phẩm', 'SL'], ...topProductsData.map((p, i) => [i + 1, p.name, p.value])]);
+    s3.getColumn(3).numFmt = '#,##0'; headerRow(s3, 3, ['Top', 'Sản phẩm', 'Số lượng']); styleSheet(s3);
 
-    const ordersSheet = workbook.addWorksheet('Don hang gan nhat');
-    applySheetBase(ordersSheet, 'ĐƠN HÀNG GẦN NHẤT', 'Danh sách đơn hàng mới cập nhật');
-    ordersSheet.columns = [{ width: 20 }, { width: 28 }, { width: 18 }, { width: 16 }, { width: 16 }];
-    ordersSheet.addRow(['Mã đơn', 'Khách hàng', 'Trạng thái', 'Ngày dự kiến', 'Ngày hoàn tất']);
-    recentOrdersRows.forEach((row) => ordersSheet.addRow(row));
-    styleHeaders(ordersSheet, 4);
-    applyBorders(ordersSheet);
+    const s4 = workbook.addWorksheet('Don hang');
+    titleRow(s4, 1, 'ĐƠN HÀNG GẦN NHẤT', 'Hoạt động đơn hàng');
+    s4.columns = [{ width: 20 }, { width: 28 }, { width: 18 }, { width: 16 }, { width: 16 }];
+    s4.addRows([['Mã đơn', 'Khách hàng', 'Trạng thái', 'Ngày dự kiến', 'Ngày hoàn tất'],
+      ...recentOrders.map(o => [o.order_no || o.id || '-', o.customer_name || '-', statusMeta[o.status]?.label || o.status || '', formatDate(o.expected_delivery_date), o.completed_at ? formatDate(o.completed_at) : '--'])]);
+    headerRow(s4, 3, ['Mã đơn', 'Khách hàng', 'Trạng thái', 'Ngày dự kiến', 'Ngày hoàn tất']); styleSheet(s4);
 
-    const activitiesSheet = workbook.addWorksheet('Nhap xuat gan nhat');
-    applySheetBase(activitiesSheet, 'NHẬP XUẤT GẦN NHẤT', 'Lịch sử nhập/xuất kho gần đây');
-    activitiesSheet.columns = [{ width: 18 }, { width: 20 }, { width: 22 }, { width: 18 }, { width: 16 }];
-    activitiesSheet.addRow(['Loại', 'Mã tham chiếu', 'Kho', 'Thời gian', 'Trạng thái']);
-    recentActivitiesRows.forEach((row) => activitiesSheet.addRow(row));
-    styleHeaders(activitiesSheet, 4);
-    applyBorders(activitiesSheet);
-
-    const buffer = await workbook.xlsx.writeBuffer();
-    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const buf = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `dashboard-bao-cao-${reportMonth}.xlsx`;
+    link.download = `dashboard-admin-${new Date().toISOString().slice(0, 10)}.xlsx`;
     link.click();
     URL.revokeObjectURL(link.href);
   };
 
-  if (loading) return <div style={{ padding: 24, color: '#64748B' }}>Đang tải dữ liệu tổng quan...</div>;
-  if (error) return <div style={{ padding: 24, color: '#B91C1C', background: '#FEF2F2', borderRadius: 16 }}>{error}</div>;
+  if (loading) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', color: '#94a3b8', fontSize: 15 }}>
+      <i className="ri-loader-4-line" style={{ fontSize: 24, marginRight: 10, animation: 'spin 1s linear infinite' }} />
+      Đang tải dashboard...
+    </div>
+  );
+  if (error) return (
+    <div style={{ padding: 24, color: '#b91c1c', background: '#fee2e2', borderRadius: 16, border: '1px solid #fecaca' }}>
+      {error}
+    </div>
+  );
 
   return (
-    <div
-      className="dashboard-enter"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 20,
-        padding: 4,
-        background: 'linear-gradient(180deg, #F7FAFC 0%, #EEF4FB 100%)',
-        borderRadius: 28,
-        opacity: pageLoaded ? 1 : 0,
-        transform: pageLoaded ? 'translateY(0)' : 'translateY(16px)',
-        transition: 'opacity 320ms ease, transform 320ms ease'
-      }}
-    >
-      <div className="dashboard-block-enter dashboard-block-delay-1" style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center', flexWrap: 'wrap', padding: '0 20px', marginBottom: 4 }}>
-        <div style={{ paddingLeft: 4 }}>
-          <h2 style={{ margin: 0, fontSize: 26, lineHeight: 1.2, color: '#0F172A' }}>Tổng quan hệ thống</h2>
-          <p style={{ margin: '8px 0 0', color: '#64748B' }}>Cập nhật lần cuối: {lastUpdatedText}</p>
-        </div>
+    <>
+      <style>{`
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes fadeUp { from { opacity:0; transform:translateY(18px); } to { opacity:1; transform:translateY(0); } }
+        @media (max-width: 1024px) {
+          .adm-stat-row  { grid-template-columns: repeat(2, 1fr) !important; }
+          .adm-chart-row { grid-template-columns: 1fr !important; }
+          .adm-row-2col  { grid-template-columns: 1fr !important; }
+        }
+        @media (max-width: 640px) {
+          .adm-stat-row  { grid-template-columns: 1fr 1fr !important; gap: 10px !important; }
+          .adm-chart-row { grid-template-columns: 1fr !important; }
+          .adm-row-2col  { grid-template-columns: 1fr !important; }
+          .stat-card { padding: 14px !important; }
+        }
+        .fade-up-1 { animation: fadeUp 400ms ease 0ms   both; }
+        .fade-up-2 { animation: fadeUp 400ms ease 80ms  both; }
+        .fade-up-3 { animation: fadeUp 400ms ease 160ms both; }
+        .fade-up-4 { animation: fadeUp 400ms ease 240ms both; }
+        .fade-up-5 { animation: fadeUp 400ms ease 320ms both; }
+      `}</style>
 
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', paddingRight: 4 }}>
+      <div style={{
+        padding: 20,
+        background: 'linear-gradient(160deg, #eff6ff 0%, #f0f4ff 40%, #fafbff 100%)',
+        borderRadius: 24,
+        opacity: pageLoaded ? 1 : 0,
+        transition: 'opacity 320ms ease',
+      }}>
+
+        {/* Header */}
+        <div className="fade-up-1" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: '#0f172a' }}>Tổng quan hệ thống</h2>
+            <p style={{ margin: '6px 0 0', color: '#94a3b8', fontSize: 13 }}>Cập nhật: {lastUpdatedText}</p>
+          </div>
           <button
-            type="button"
             onClick={handleExportReport}
             style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 8,
-              border: '1px solid #0F9D8E',
-              borderRadius: 12,
-              padding: '10px 16px',
-              background: 'linear-gradient(135deg,rgb(45, 212, 114) 0%,rgb(91, 170, 26) 100%)',
-              color: '#FFFFFF',
-              fontWeight: 700,
-              cursor: 'pointer',
-              boxShadow: '0 14px 28px rgba(13, 148, 136, 0.22)',
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+              border: 'none', borderRadius: 12, padding: '10px 16px',
+              background: 'linear-gradient(90deg, #2563eb 0%, #3b82f6 100%)',
+              color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+              boxShadow: '0 8px 24px rgba(37,99,235,0.28)',
+              transition: 'transform 150ms, box-shadow 150ms',
             }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 12px 30px rgba(37,99,235,0.36)'; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(37,99,235,0.28)'; }}
           >
             <i className="ri-download-2-line" />
             Xuất báo cáo
           </button>
         </div>
-      </div>
 
-      <div className="dashboard-block-enter dashboard-block-delay-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 16 }}>
-        <StatButtonCard label="Tổng doanh thu" value={`${formatCurrency(totalRevenue)} đ`} hint={`${completedOrderCount} đơn hoàn tất`} icon={statIcons.revenue} accent="linear-gradient(135deg, #10B981, #059669)" hoverColor="#10B981" hovered={hoveredCard === 'revenue'} onMouseEnter={() => setHoveredCard('revenue')} onMouseLeave={() => setHoveredCard(null)} />
-        <StatButtonCard label="Tổng sản phẩm trong kho" value={formatCurrency(totalStock)} hint="Dữ liệu từ báo cáo tổng hợp" icon={statIcons.stock} accent="linear-gradient(135deg, #3B82F6, #2563EB)" hoverColor="#3B82F6" hovered={hoveredCard === 'stock'} onMouseEnter={() => setHoveredCard('stock')} onMouseLeave={() => setHoveredCard(null)} />
-        <StatButtonCard label="Đơn đang xử lý" value={processingOrdersCount} hint="Chờ xử lý / đang xử lý / kho" icon={statIcons.processing} accent="linear-gradient(135deg, #F59E0B, #D97706)" hoverColor="#F59E0B" hovered={hoveredCard === 'processing'} onMouseEnter={() => setHoveredCard('processing')} onMouseLeave={() => setHoveredCard(null)} />
-        <StatButtonCard label="Sản phẩm sắp hết" value={lowStockCount} hint="Cần nhập bổ sung" icon={statIcons.alert} accent="linear-gradient(135deg, #EF4444, #DC2626)" hoverColor="#EF4444" hovered={hoveredCard === 'alert'} onMouseEnter={() => setHoveredCard('alert')} onMouseLeave={() => setHoveredCard(null)} />
-      </div>
+        {/* Stat cards */}
+        <div className="adm-stat-row fade-up-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 16 }}>
+          <StatCard label="Tổng doanh thu" value={`${formatCurrency(totalRevenue)} đ`} hint={`${completedOrderCount} đơn hoàn tất`} icon={statIcons.revenue} accent="linear-gradient(135deg, #2563eb, #3b82f6)" hovered={hoveredCard === 'revenue'} onMouseEnter={() => setHoveredCard('revenue')} onMouseLeave={() => setHoveredCard(null)} />
+          <StatCard label="Sản phẩm trong kho" value={formatCurrency(totalStock)} hint="Từ báo cáo tổng hợp" icon={statIcons.stock} accent="linear-gradient(135deg, #0ea5e9, #38bdf8)" hovered={hoveredCard === 'stock'} onMouseEnter={() => setHoveredCard('stock')} onMouseLeave={() => setHoveredCard(null)} />
+          <StatCard label="Đơn đang xử lý" value={processingOrdersCount} hint="Chờ / đang xử lý / kho" icon={statIcons.processing} accent="linear-gradient(135deg, #f59e0b, #fbbf24)" hovered={hoveredCard === 'processing'} onMouseEnter={() => setHoveredCard('processing')} onMouseLeave={() => setHoveredCard(null)} />
+          <StatCard label="Sản phẩm sắp hết" value={lowStockCount} hint="Cần nhập bổ sung" icon={statIcons.alert} accent="linear-gradient(135deg, #ef4444, #f87171)" hovered={hoveredCard === 'alert'} onMouseEnter={() => setHoveredCard('alert')} onMouseLeave={() => setHoveredCard(null)} />
+        </div>
 
-      <div className="dashboard-block-enter dashboard-block-delay-3" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
-        <SectionCard title="Nhập kho và xuất kho" subtitle="Biến động hàng tháng từ dữ liệu thật">
-          <ResponsiveContainer width="100%" height={320}>
-            <BarChart data={monthlyImportExportData} barCategoryGap={18}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-              <XAxis dataKey="name" axisLine={false} tickLine={false} />
-              <YAxis axisLine={false} tickLine={false} />
-              <RechartsTooltip cursor={{ fill: '#F8FAFC' }} />
-              <Bar dataKey="Nhập" fill="#10B981" radius={[10, 10, 0, 0]} />
-              <Bar dataKey="Xuất" fill="#60A5FA" radius={[10, 10, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </SectionCard>
+        {/* Charts row */}
+        <div className="adm-chart-row fade-up-3" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 14, marginBottom: 14 }}>
+          <SectionCard title="Nhập kho & Xuất kho" subtitle="Biến động hàng tháng">
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={monthlyImportExportData} barCategoryGap={18}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e0e7ff" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                <RechartsTooltip cursor={{ fill: '#f0f4ff' }} />
+                <Bar dataKey="Nhập" fill="#2563eb" radius={[8, 8, 0, 0]} />
+                <Bar dataKey="Xuất" fill="#60a5fa" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </SectionCard>
 
-        <SectionCard title="Sản phẩm bán chạy nhất" subtitle="Theo số lượng từ đơn hoàn tất">
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-            <ResponsiveContainer width="100%" height={220}>
+          <SectionCard title="Sản phẩm bán chạy" subtitle="Theo số lượng bán">
+            <ResponsiveContainer width="100%" height={200}>
               <PieChart>
-                <Pie data={topProductsData} dataKey="value" nameKey="name" innerRadius={64} outerRadius={90} paddingAngle={4}>
+                <Pie data={topProductsData} dataKey="value" nameKey="name" innerRadius={56} outerRadius={82} paddingAngle={4}>
                   {topProductsData.map((entry, index) => <Cell key={entry.name} fill={ACCENT_COLORS[index % ACCENT_COLORS.length]} />)}
                 </Pie>
                 <RechartsTooltip />
               </PieChart>
             </ResponsiveContainer>
-            <div style={{ width: '100%', display: 'grid', gap: 8, marginTop: 4 }}>
+            <div style={{ display: 'grid', gap: 7, marginTop: 4 }}>
               {topProductsData.map((item, index) => (
                 <div key={item.name} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#475569' }}>
                   <span><span style={{ color: ACCENT_COLORS[index % ACCENT_COLORS.length] }}>●</span> {item.name}</span>
@@ -360,80 +305,79 @@ export default function AdminDashboardPage() {
                 </div>
               ))}
             </div>
-          </div>
-        </SectionCard>
-      </div>
+          </SectionCard>
+        </div>
 
-      <div className="dashboard-block-enter dashboard-block-delay-4" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-        <SectionCard title="Xu hướng doanh thu" subtitle="Doanh thu theo tháng từ đơn hoàn tất">
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={revenueTrend} barCategoryGap={18}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-              <XAxis dataKey="name" axisLine={false} tickLine={false} />
-              <YAxis axisLine={false} tickLine={false} />
-              <RechartsTooltip formatter={(value) => `${formatCurrency(value)} đ`} />
-              <Bar dataKey="DoanhThu" fill="#8B5CF6" radius={[10, 10, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </SectionCard>
+        {/* Revenue + Health row */}
+        <div className="adm-row-2col fade-up-4" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+          <SectionCard title="Xu hướng doanh thu" subtitle="Doanh thu theo tháng">
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={revenueTrend} barCategoryGap={18}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e0e7ff" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                <RechartsTooltip formatter={(v) => `${formatCurrency(v)} đ`} />
+                <Bar dataKey="DoanhThu" fill="#8b5cf6" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </SectionCard>
 
-        <SectionCard title="Sức khỏe vận hành" subtitle="Tổng hợp chỉ số nhanh">
-          <div style={{ display: 'grid', gap: 12 }}>
-            {[
-              { label: 'Tổng doanh thu', value: `${formatCurrency(totalRevenue)} đ`, color: '#10B981' },
-              { label: 'Tổng tồn kho', value: `${formatCurrency(totalStock)} SP`, color: '#3B82F6' },
-              { label: 'Đơn hoàn tất', value: `${completedOrderCount} đơn`, color: '#8B5CF6' },
-              { label: 'Đơn đang xử lý', value: `${processingOrdersCount} đơn`, color: '#EF4444' },
-            ].map((item) => (
-              <div key={item.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', borderRadius: 16, background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
-                <span style={{ color: '#475569', fontWeight: 600 }}>{item.label}</span>
-                <span style={{ fontWeight: 800, color: item.color }}>{item.value}</span>
-              </div>
-            ))}
-          </div>
-        </SectionCard>
-      </div>
+          <SectionCard title="Sức khỏe vận hành" subtitle="Tổng hợp chỉ số nhanh">
+            <div style={{ display: 'grid', gap: 10 }}>
+              {[
+                { label: 'Tổng doanh thu', value: `${formatCurrency(totalRevenue)} đ`, color: '#2563eb' },
+                { label: 'Tổng tồn kho', value: `${formatCurrency(totalStock)} SP`, color: '#0ea5e9' },
+                { label: 'Đơn hoàn tất', value: `${completedOrderCount} đơn`, color: '#10b981' },
+                { label: 'Đơn đang xử lý', value: `${processingOrdersCount} đơn`, color: '#f59e0b' },
+              ].map((item) => (
+                <div key={item.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderRadius: 14, background: '#f0f4ff', border: '1px solid #e0e7ff' }}>
+                  <span style={{ color: '#475569', fontWeight: 600, fontSize: 14 }}>{item.label}</span>
+                  <span style={{ fontWeight: 800, color: item.color, fontSize: 14 }}>{item.value}</span>
+                </div>
+              ))}
+            </div>
+          </SectionCard>
+        </div>
 
-      <div className="dashboard-block-enter dashboard-block-delay-5" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-        <SectionCard title="Đơn hàng gần nhất" subtitle="Hoạt động đơn hàng mới nhất">
-          <div style={{ display: 'grid', gap: 10 }}>
-            {recentOrders.length === 0 ? (
-              <div style={{ padding: 18, textAlign: 'center', color: '#64748B', background: '#F8FAFC', borderRadius: 16 }}>Chưa có dữ liệu đơn hàng.</div>
-            ) : (
-              recentOrders.map((order) => {
-                const meta = statusMeta[order.status] || { label: order.status || 'Không rõ', bg: '#E2E8F0', color: '#334155' };
+        {/* Orders + Activities row */}
+        <div className="adm-row-2col fade-up-5" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <SectionCard title="Đơn hàng gần nhất" subtitle="Hoạt động đơn hàng mới nhất">
+            <div style={{ display: 'grid', gap: 10 }}>
+              {recentOrders.length === 0 ? (
+                <div style={{ padding: 18, textAlign: 'center', color: '#94a3b8', background: '#f0f4ff', borderRadius: 14 }}>Chưa có dữ liệu đơn hàng.</div>
+              ) : recentOrders.map((order) => {
+                const meta = statusMeta[order.status] || { label: order.status || 'Không rõ', bg: '#f1f5f9', color: '#334155' };
                 return (
-                  <div key={order.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', borderRadius: 16, background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+                  <div key={order.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderRadius: 14, background: '#f0f4ff', border: '1px solid #e0e7ff' }}>
                     <div>
-                      <div style={{ fontWeight: 700, color: '#0F172A' }}>{order.order_no}</div>
-                      <div style={{ fontSize: 12, color: '#64748B', marginTop: 4 }}>{order.customer_name} • {formatDate(order.expected_delivery_date)}</div>
+                      <div style={{ fontWeight: 700, color: '#0f172a', fontSize: 14 }}>{order.order_no}</div>
+                      <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 3 }}>{order.customer_name} • {formatDate(order.expected_delivery_date)}</div>
                     </div>
-                    <span style={{ fontSize: 12, fontWeight: 700, padding: '6px 10px', borderRadius: 999, background: meta.bg, color: meta.color }}>{meta.label}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 999, background: meta.bg, color: meta.color }}>{meta.label}</span>
                   </div>
                 );
-              })
-            )}
-          </div>
-        </SectionCard>
+              })}
+            </div>
+          </SectionCard>
 
-        <SectionCard title="Nhập xuất gần nhất" subtitle="Lịch sử vận chuyển kho">
-          <div style={{ display: 'grid', gap: 10 }}>
-            {recentActivities.length === 0 ? (
-              <div style={{ padding: 18, textAlign: 'center', color: '#64748B', background: '#F8FAFC', borderRadius: 16 }}>Chưa có hoạt động nhập xuất.</div>
-            ) : (
-              recentActivities.map((activity, index) => (
-                <div key={`${activity.type}-${activity.id || index}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', borderRadius: 16, background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+          <SectionCard title="Nhập xuất gần nhất" subtitle="Lịch sử vận chuyển kho">
+            <div style={{ display: 'grid', gap: 10 }}>
+              {recentActivities.length === 0 ? (
+                <div style={{ padding: 18, textAlign: 'center', color: '#94a3b8', background: '#f0f4ff', borderRadius: 14 }}>Chưa có hoạt động nhập xuất.</div>
+              ) : recentActivities.map((act, index) => (
+                <div key={`${act.type}-${act.id || index}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderRadius: 14, background: '#f0f4ff', border: '1px solid #e0e7ff' }}>
                   <div>
-                    <div style={{ fontWeight: 700, color: '#0F172A' }}>{activity.type}</div>
-                    <div style={{ fontSize: 12, color: '#64748B', marginTop: 4 }}>{activity.code || activity.reference_no || activity.order_no || 'N/A'} • {formatDate(activity.activity_date)}</div>
+                    <div style={{ fontWeight: 700, color: '#0f172a', fontSize: 14 }}>{act.type}</div>
+                    <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 3 }}>{act.code || act.reference_no || act.order_no || 'N/A'} • {formatDate(act.activity_date)}</div>
                   </div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: '#0EA5E9' }}>{activity.status || 'logged'}</div>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#2563eb' }}>{act.status || 'logged'}</span>
                 </div>
-              ))
-            )}
-          </div>
-        </SectionCard>
+              ))}
+            </div>
+          </SectionCard>
+        </div>
+
       </div>
-    </div>
+    </>
   );
 }

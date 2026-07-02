@@ -1,31 +1,30 @@
 // ============================================================
-//  DESIGN SYSTEM — XUÂT NHẬP TỒN
-//  Tông màu xanh dương sang, responsive laptop + điện thoại
+//  DESIGN SYSTEM — STEEL STOCK
+//  Tông màu xanh dương, responsive laptop + điện thoại
 // ============================================================
 
-// --- MÀU CHÍNH ---
 export const colors = {
-  // Primary
-  primary:        '#2563eb',   // xanh dương đậm — nút chính, link
-  primaryLight:   '#3b82f6',   // hover state
-  primaryDark:    '#1d4ed8',   // active state
-  primarySoft:    '#eff6ff',   // nền nhẹ primary
-  primaryBorder:  '#bfdbfe',   // viền nhẹ
+  // Primary — xanh dương chính
+  primary:        '#2563eb',
+  primaryLight:   '#3b82f6',
+  primaryDark:    '#1d4ed8',
+  primarySoft:    '#eff6ff',
+  primaryBorder:  '#bfdbfe',
 
   // Accent / Success
-  success:        '#10b981',   // xanh lá — thành công, nhập kho
+  success:        '#10b981',
   successLight:   '#059669',
   successSoft:    '#ecfdf3',
   successBorder:  '#a7f3d0',
 
-  // Warning / Hoàn
-  warning:        '#f59e0b',   // vàng cam — cảnh báo, chờ xử lý
+  // Warning
+  warning:        '#f59e0b',
   warningLight:   '#d97706',
   warningSoft:    '#fffbeb',
   warningBorder:  '#fde68a',
 
   // Danger / Lỗi
-  danger:         '#ef4444',   // đỏ — lỗi, xóa, hủy
+  danger:         '#ef4444',
   dangerLight:    '#dc2626',
   dangerSoft:     '#fef2f2',
   dangerBorder:   '#fecaca',
@@ -36,18 +35,23 @@ export const colors = {
   purpleSoft:     '#f5f3ff',
   purpleBorder:   '#ddd6fe',
 
-  // Neutral (nền, chữ)
+  // Cyan
+  cyan:           '#0ea5e9',
+  cyanLight:      '#38bdf8',
+  cyanSoft:       '#e0f2fe',
+
+  // Neutral
   white:          '#ffffff',
-  background:     '#f8fafc',
+  background:     '#f0f4ff',
   backgroundAlt:  '#f1f5f9',
-  surface:        '#ffffff',   // card, modal
-  border:         '#e2e8f0',
+  surface:        '#ffffff',
+  border:         '#e0e7ff',
   borderLight:    '#f1f5f9',
 
   // Text
-  text:           '#0f172a',   // đen đậm
-  textSecondary:  '#475569',   // xám
-  textMuted:      '#94a3b8',   // xám nhạt
+  text:           '#0f172a',
+  textSecondary:  '#475569',
+  textMuted:      '#94a3b8',
   textInverse:    '#ffffff',
 
   // Trạng thái đơn hàng
@@ -80,10 +84,10 @@ export const radius = {
 
 // --- SHADOW ---
 export const shadows = {
-  sm:  '0 1px 3px rgba(15,23,42,0.06), 0 1px 2px rgba(15,23,42,0.04)',
-  md:  '0 4px 12px rgba(15,23,42,0.08), 0 2px 4px rgba(15,23,42,0.04)',
-  lg:  '0 10px 28px rgba(15,23,42,0.10), 0 4px 8px rgba(15,23,42,0.06)',
-  xl:  '0 20px 48px rgba(15,23,42,0.14), 0 8px 16px rgba(15,23,42,0.08)',
+  sm:  '0 1px 3px rgba(37,99,235,0.06), 0 1px 2px rgba(37,99,235,0.04)',
+  md:  '0 4px 12px rgba(37,99,235,0.08), 0 2px 4px rgba(37,99,235,0.04)',
+  lg:  '0 10px 28px rgba(37,99,235,0.10), 0 4px 8px rgba(37,99,235,0.06)',
+  xl:  '0 20px 48px rgba(37,99,235,0.14), 0 8px 16px rgba(37,99,235,0.08)',
 };
 
 // --- TYPOGRAPHY ---
@@ -190,6 +194,7 @@ export const badge = (variant = 'default') => {
     warning:   { bg: colors.warningSoft, color: colors.warningLight, border: colors.warningBorder },
     danger:    { bg: colors.dangerSoft, color: colors.danger, border: colors.dangerBorder },
     purple:    { bg: colors.purpleSoft, color: colors.purple, border: colors.purpleBorder },
+    cyan:      { bg: colors.cyanSoft, color: colors.cyan, border: '#bae6fd' },
   };
   const b = map[variant] || map.default;
   return {
@@ -215,7 +220,7 @@ export const pageWrap = {
 };
 
 // ============================================================
-//  COMPONENT FACTORIES — dùng nhanh trong JSX
+//  COMPONENT FACTORIES
 // ============================================================
 
 export const StatCard = ({ icon, value, label, sub, accent = colors.primary, delay = 0 }) => ({
@@ -231,15 +236,11 @@ export const StatCard = ({ icon, value, label, sub, accent = colors.primary, del
     {
       type: 'div',
       style: {
-        width: 44,
-        height: 44,
+        width: 44, height: 44,
         borderRadius: radius.lg,
         background: accent + '18',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: accent,
-        fontSize: 20,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: accent, fontSize: 20,
       },
       children: icon,
     },
@@ -255,15 +256,6 @@ export const StatCard = ({ icon, value, label, sub, accent = colors.primary, del
 });
 
 export default {
-  colors,
-  spacing,
-  radius,
-  shadows,
-  fonts,
-  btn,
-  card,
-  input,
-  badge,
-  pageWrap,
-  StatCard,
+  colors, spacing, radius, shadows, fonts,
+  btn, card, input, badge, pageWrap, StatCard,
 };
