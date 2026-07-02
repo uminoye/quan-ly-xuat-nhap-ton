@@ -112,6 +112,12 @@ export default function MainLayout() {
         * { box-sizing: border-box; }
         body { margin: 0; overflow-x: hidden; }
 
+        /* Hide scrollbars */
+        .ml-nav-scroll::-webkit-scrollbar { display: none; }
+        .ml-nav-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+        .ml-main.with-sidebar::-webkit-scrollbar { display: none; }
+        .ml-main.with-sidebar { scrollbar-width: none; -ms-overflow-style: none; }
+
         /* Mobile: sidebar fixed + slides in/out */
         @media (max-width: 900px) {
           .ml-sidebar { transform: translateX(-100%); transition: transform 280ms ease; }
@@ -218,7 +224,7 @@ export default function MainLayout() {
           )}
 
           {/* Nav */}
-          <nav style={{ flex: 1, padding: collapsed ? '8px 4px' : '10px 6px', display: 'flex', flexDirection: 'column', gap: 1, overflowY: 'auto' }}>
+          <nav style={{ flex: 1, padding: collapsed ? '8px 4px' : '10px 6px', display: 'flex', flexDirection: 'column', gap: 1, overflowY: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }} className="ml-nav-scroll">
             {groupedMenus.map((group) => (
               <div key={group.title} style={{ display: 'flex', flexDirection: 'column', gap: 1, marginBottom: 4 }}>
                 {!collapsed && <div style={{ padding: '5px 10px 3px', fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.25)', letterSpacing: 0.7 }}>{group.title}</div>}
