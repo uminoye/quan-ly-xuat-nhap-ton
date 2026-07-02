@@ -111,8 +111,8 @@ export default function MainLayout() {
           .ml-topbar-h { display: flex !important; }
         }
 
-        /* Tablet: collapse sidebar */
-        @media (min-width: 901px) and (max-width: 1200px) {
+        /* Auto-collapse sidebar when viewport is narrow (zoom in / small screen) */
+        @media (max-width: 1100px) {
           .ml-sidebar  { width: 56px !important; min-width: 56px !important; }
           .ml-sidebar .ml-logo-text  { display: none !important; }
           .ml-sidebar .ml-group-lbl  { display: none !important; }
@@ -120,11 +120,24 @@ export default function MainLayout() {
           .ml-sidebar .ml-nav-lbl    { display: none !important; }
           .ml-sidebar .ml-collapse-btn { justify-content: center !important; padding-left: 0 !important; }
           .ml-sidebar .ml-collapse-lbl { display: none !important; }
-          .ml-main.with-sidebar { margin-left: 56px !important; }
+        }
+
+        /* Mobile: sidebar slides in/out */
+        @media (max-width: 900px) {
+          .ml-sidebar { transform: translateX(-100%); transition: transform 280ms ease; }
+          .ml-sidebar.open { transform: translateX(0); }
+          .ml-main.with-sidebar { margin-left: 0 !important; }
+          .ml-topbar-h { display: none !important; }
+          .ml-topbar-m { display: flex !important; }
+        }
+
+        @media (min-width: 901px) {
+          .ml-topbar-m { display: none !important; }
+          .ml-topbar-h { display: flex !important; }
         }
 
         /* Desktop: main content offset by sidebar width */
-        @media (min-width: 1201px) {
+        @media (min-width: 1101px) {
           .ml-main.with-sidebar { margin-left: 220px !important; }
         }
 
