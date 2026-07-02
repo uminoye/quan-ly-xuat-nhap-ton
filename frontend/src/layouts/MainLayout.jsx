@@ -294,7 +294,7 @@ export default function MainLayout() {
         </aside>
 
         {/* ── MAIN ── */}
-        <div className="ml-main with-sidebar" style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden', paddingLeft, transition: 'padding-left 280ms ease' }}>
+        <div className="ml-main with-sidebar" style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, paddingLeft, transition: 'padding-left 280ms ease' }}>
 
           {/* Desktop Topbar */}
           <header className="ml-topbar-h" style={{ height: 64, flexShrink: 0, background: C.white, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', boxShadow: '0 2px 18px rgba(37,99,235,0.06)', borderBottom: '1.5px solid #e0e7ff', position: 'relative', zIndex: 20 }}>
