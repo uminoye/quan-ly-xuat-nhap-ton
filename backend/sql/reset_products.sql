@@ -3,6 +3,7 @@
 -- Order matters: delete child tables BEFORE parent tables (FK)
 
 DELETE FROM inventory_balances;
+DELETE FROM inventory_transactions;
 DELETE FROM production_receipt_items;
 DELETE FROM sales_order_items;
 DELETE FROM products;
