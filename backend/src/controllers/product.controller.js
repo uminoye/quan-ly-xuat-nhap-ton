@@ -155,10 +155,13 @@ const resetProducts = async (req, res) => {
         await client.query(`DELETE FROM inventory_balances`);
         await client.query(`DELETE FROM products`);
         await client.query(`DELETE FROM auto_codes WHERE prefix = 'SP'`);
+        await client.query(`DELETE FROM order_items`);
+        await client.query(`DELETE FROM receipt_items`);
         await client.query('COMMIT');
         res.status(200).json({ message: 'Da reset toan bo san pham!' });
     } catch (err) {
         try { await client.query('ROLLBACK'); } catch (_) {}
+        console.error('[resetProducts] error:', err.message);
         res.status(500).json({ message: 'Loi khi reset', error: err.message });
     } finally {
         client.release();
