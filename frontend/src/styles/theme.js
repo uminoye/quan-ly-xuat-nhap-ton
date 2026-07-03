@@ -218,6 +218,9 @@ export const pageWrap = {
   background: `linear-gradient(160deg, #eff6ff 0%, ${colors.background} 40%, #f8fafc 100%)`,
   color: colors.text,
 };
+export const pageWrapMobile = {
+  padding: spacing.sm,
+};
 
 // ============================================================
 //  COMPONENT FACTORIES

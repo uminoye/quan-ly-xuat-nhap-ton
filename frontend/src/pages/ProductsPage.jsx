@@ -409,16 +409,32 @@ export default function ProductsPage() {
         @keyframes slideUp { from { opacity: 0; transform: translateY(16px) scale(0.98) } to { opacity: 1; transform: translateY(0) scale(1) } }
         @keyframes fadeUp { from { opacity: 0; transform: translateY(12px) } to { opacity: 1; transform: translateY(0) } }
         .product-card:hover .card-actions { opacity: 1 !important; }
+        @media (max-width: 640px) {
+          .prod-wrap { padding: 8px !important; }
+          .prod-header { flex-direction: column !important; align-items: flex-start !important; }
+          .prod-header-btns { width: 100% !important; }
+          .prod-header-btns > * { flex: 1 !important; }
+          .prod-filter-row { grid-template-columns: 1fr !important; }
+          .prod-filter-row > * { min-width: 0; }
+          .prod-status-pills { flex-wrap: wrap !important; }
+          .prod-grid { grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)) !important; gap: 10px !important; }
+          .prod-card-img { height: 120px !important; }
+          .prod-card-body { padding: 10px !important; }
+          .prod-card-title { font-size: 13px !important; }
+          .prod-card-price { font-size: 12px !important; }
+          .prod-card-qty { font-size: 17px !important; }
+          .prod-page-title { font-size: 22px !important; }
+        }
       `}</style>
 
-      <div style={{ maxWidth: 1440, margin: '0 auto' }}>
+      <div style={{ maxWidth: 1440, margin: '0 auto' }} className="prod-wrap">
 
         {/* ---- PAGE HEADER ---- */}
-        <div style={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end',
-          flexWrap: 'wrap', gap: 16, marginBottom: 24,
-          animation: 'fadeUp 400ms ease both',
-        }}>
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end',
+            flexWrap: 'wrap', gap: 16, marginBottom: 24,
+            animation: 'fadeUp 400ms ease both',
+          }} className="prod-header">
           <div>
             <div style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -429,7 +445,7 @@ export default function ProductsPage() {
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: colors.primary }} />
               Quản lý
             </div>
-            <h1 style={{ margin: 0, fontSize: 30, fontWeight: 900, color: colors.text, letterSpacing: '-0.03em' }}>
+            <h1 className="prod-page-title" style={{ margin: 0, fontSize: 30, fontWeight: 900, color: colors.text, letterSpacing: '-0.03em' }}>
               Sản phẩm
             </h1>
             <p style={{ margin: '6px 0 0', color: colors.textMuted, fontSize: 14 }}>
@@ -437,7 +453,7 @@ export default function ProductsPage() {
             </p>
           </div>
 
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }} className="prod-header-btns">
             {canEdit && (
               <>
                 <button
@@ -468,7 +484,7 @@ export default function ProductsPage() {
             display: 'grid',
             gridTemplateColumns: 'minmax(0,2fr) minmax(0,1.5fr) minmax(0,1fr)',
             gap: 12, alignItems: 'center',
-          }}>
+          }} className="prod-filter-row">
             {/* Search */}
             <div style={{
               display: 'flex', alignItems: 'center', gap: 10,
@@ -501,7 +517,7 @@ export default function ProductsPage() {
             </div>
 
             {/* Status filter pills */}
-            <div style={{ display: 'flex', gap: 6 }}>
+            <div style={{ display: 'flex', gap: 6 }} className="prod-status-pills">
               {[
                 { key: 'all', label: 'Tất cả', color: colors.textSecondary },
                 { key: 'low-stock', label: 'Sắp hết', color: colors.warning },
@@ -581,7 +597,7 @@ export default function ProductsPage() {
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
             gap: 16, marginBottom: 32,
-          }}>
+          }} className="prod-grid">
             {filteredProducts.map((item, i) => {
               const minStock = Number(item.min_stock) || 50;
               const displayQty = getDisplayQty(item);
@@ -621,7 +637,7 @@ export default function ProductsPage() {
                       ? `url(${item.image_url}) center/cover no-repeat`
                       : `linear-gradient(160deg, ${colors.primarySoft} 0%, #e8edf8 60%, ${colors.primarySoft}88 100%)`,
                     borderBottom: `1px solid ${colors.borderLight}`,
-                  }}>
+                  }} className="prod-card-img">
                     {!item.image_url && (
                       <div style={{
                         position: 'absolute', inset: 0, display: 'flex',
@@ -650,8 +666,8 @@ export default function ProductsPage() {
                   </div>
 
                   {/* Content */}
-                  <div style={{ padding: '18px 18px 18px' }}>
-                    <h3 style={{
+                  <div style={{ padding: '18px 18px 18px' }} className="prod-card-body">
+                    <h3 className="prod-card-title" style={{
                       margin: '0 0 8px', fontSize: 15, fontWeight: 800,
                       color: colors.text, lineHeight: 1.3,
                       display: '-webkit-box', WebkitLineClamp: 2,
@@ -691,14 +707,14 @@ export default function ProductsPage() {
                     }}>
                       <div>
                         <div style={{ fontSize: 11, color: colors.textMuted }}>Đơn giá</div>
-                        <div style={{ fontSize: 15, fontWeight: 800, color: colors.success }}>{fmtVND(item.sale_price)} đ</div>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: colors.success }} className="prod-card-price">{fmtVND(item.sale_price)} đ</div>
                         <div style={{ fontSize: 11, color: colors.textMuted }}>/{item.unit}</div>
                       </div>
                       <div style={{ textAlign: 'right' }}>
                         <div style={{
                           fontSize: 22, fontWeight: 900,
                           color: status === 'out-stock' ? colors.danger : status === 'low-stock' ? colors.warning : colors.text,
-                        }}>
+                        }} className="prod-card-qty">
                           {displayQty}
                         </div>
                         <div style={{ fontSize: 11, color: colors.textMuted }}>Tồn kho</div>
