@@ -26,7 +26,7 @@ const generateCode = async (type, dbClient) => {
   // Nếu caller truyền vào pg client (đang trong transaction), dùng nó
   // Nếu không, tạo transaction riêng để đảm bảo FOR UPDATE lock hoạt động
   if (dbClient) {
-    return _generateInClient(dbClient, prefix, year, pattern);
+    return _generateInClient(dbClient, prefix, year, pattern, true);
   }
 
   const client = await db.pool.connect();
@@ -37,8 +37,8 @@ const generateCode = async (type, dbClient) => {
   }
 };
 
-async function _generateInClient(client, prefix, year, pattern) {
-  await client.query('BEGIN');
+async function _generateInClient(client, prefix, year, pattern, inTransaction = false) {
+  if (!inTransaction) await client.query('BEGIN');
 
   const lockResult = await client.query(
     `SELECT code FROM auto_codes WHERE code LIKE $1 ORDER BY code DESC LIMIT 1 FOR UPDATE`,
@@ -59,7 +59,7 @@ async function _generateInClient(client, prefix, year, pattern) {
     [newCode, prefix, year]
   );
 
-  await client.query('COMMIT');
+  if (!inTransaction) await client.query('COMMIT');
   return newCode;
 }
 

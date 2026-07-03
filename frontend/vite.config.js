@@ -12,9 +12,9 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       proxy: {
         '/api': {
-          target: 'https://quan-ly-xuat-nhap-ton.onrender.com',
+          target: 'http://localhost:5000',
           changeOrigin: true,
-          secure: true,
+          secure: false,
         },
       },
     },
