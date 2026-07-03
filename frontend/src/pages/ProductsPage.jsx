@@ -417,13 +417,19 @@ export default function ProductsPage() {
           .prod-filter-row { grid-template-columns: 1fr !important; }
           .prod-filter-row > * { min-width: 0; }
           .prod-status-pills { flex-wrap: wrap !important; }
-          .prod-grid { grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)) !important; gap: 10px !important; }
-          .prod-card-img { height: 120px !important; }
-          .prod-card-body { padding: 10px !important; }
-          .prod-card-title { font-size: 13px !important; }
-          .prod-card-price { font-size: 12px !important; }
-          .prod-card-qty { font-size: 17px !important; }
-          .prod-page-title { font-size: 22px !important; }
+          .prod-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)) !important; gap: 10px !important; }
+          .prod-card-img { height: 100px !important; }
+          .prod-card-body { padding: 8px !important; }
+          .prod-card-title { font-size: 12px !important; line-height: 1.2 !important; }
+          .prod-card-price { font-size: 11px !important; }
+          .prod-card-qty { font-size: 16px !important; }
+          .prod-page-title { font-size: 20px !important; }
+          .prod-filter-bar { padding: 12px !important; }
+          .prod-header-btns > button { font-size: 12px !important; padding: 8px 12px !important; }
+        }
+        @media (min-width: 641px) and (max-width: 1024px) {
+          .prod-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)) !important; gap: 12px !important; }
+          .prod-card-img { height: 150px !important; }
         }
       `}</style>
 
