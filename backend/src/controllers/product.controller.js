@@ -166,8 +166,12 @@ const deleteProduct = async (req, res) => {
         }
 
         await client.query('BEGIN');
+        const skuRow = await client.query(`SELECT sku FROM products WHERE id = $1`, [id]);
+        const sku = skuRow.rows[0]?.sku;
+        await client.query(`DELETE FROM inventory_transactions WHERE product_id = $1`, [id]);
         await client.query(`DELETE FROM inventory_balances WHERE product_id = $1`, [id]);
         const result = await client.query(`DELETE FROM products WHERE id = $1`, [id]);
+        if (sku) await client.query(`DELETE FROM auto_codes WHERE code = $1`, [sku]);
         await client.query('COMMIT');
 
         if (result.rowCount === 0) {
