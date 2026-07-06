@@ -68,8 +68,7 @@ export default function LoginPage() {
         {/* Hero text */}
         <div style={styles.hero}>
           <h1 style={styles.heroTitle} className="login-hero-title">
-            Quản lý kho hàng<br />
-            <span style={styles.heroAccent}>Xuất — Nhập — Tồn</span>
+            Quản lý kho hàng — Xuất Nhập Tồn
           </h1>
           <p style={styles.heroDesc}>
             Theo dõi xuất &mdash; nhập &mdash; tồn theo thời gian thực, phân quyền linh hoạt cho doanh nghiệp.
@@ -231,10 +230,10 @@ const styles = {
     width: '100%', height: '100%',
   },
   logoTitle: { fontSize: 17, fontWeight: 800, letterSpacing: 0.5 },
-  logoSub:  { fontSize: 11, opacity: 0.65, marginTop: 2 },
+  logoSub:  { fontSize: 13, opacity: 0.65, marginTop: 2 },
   hero: { marginTop: 64, maxWidth: 480 },
   heroTitle: {
-    margin: 0, fontSize: 52, lineHeight: 1.06, fontWeight: 800,
+    margin: 0, fontSize: 36, lineHeight: 1.2, fontWeight: 800,
     color: C.white,
   },
   heroAccent: { display: 'block', color: '#93c5fd' },
