@@ -4,9 +4,6 @@ import 'remixicon/fonts/remixicon.css';
 import api from '../services/api';
 import { formatOrderItems, normalizeOrderItems } from '../utils/orderItems';
 
-const user = JSON.parse(localStorage.getItem('user') || '{}');
-const isAuthorized = [1, 2].includes(user?.role_id);
-
 const statusConfig = {
     pending:              { label: 'Đang chờ duyệt',        tone: 'warning' },
     returned:            { label: 'Bị từ chối',             tone: 'danger' },
@@ -65,6 +62,9 @@ const enrichItems = (items, products) =>
     });
 
 export default function SalesOrdersPage() {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const isAuthorized = [1, 2].includes(user?.role_id);
+
     const [customers, setCustomers] = useState([]);
     const [products, setProducts] = useState([]);
     const [orders, setOrders] = useState([]);
