@@ -60,19 +60,19 @@ export default function LoginPage() {
             )}
           </div>
           <div>
-            <div style={styles.logoTitle}>STEEL STOCK</div>
-            <div style={styles.logoSub}>Quan ly xuat nhap ton</div>
+            <div style={styles.logoTitle}>Hệ Thống</div>
+            <div style={styles.logoSub}>Quản lý xuất nhập tồn</div>
           </div>
         </div>
 
         {/* Hero text */}
         <div style={styles.hero}>
           <h1 style={styles.heroTitle} className="login-hero-title">
-            Kho hang
-            <span style={styles.heroAccent}> chuan vi</span>
+            Quản lý kho hàng<br />
+            <span style={styles.heroAccent}>Xuất — Nhập — Tồn</span>
           </h1>
           <p style={styles.heroDesc}>
-            Theo doi xuat &mdash; nhap &mdash; ton theo thoi gian thuc, phan quyen linh hoat cho doanh nghiep.
+            Theo dõi xuất &mdash; nhập &mdash; tồn theo thời gian thực, phân quyền linh hoạt cho doanh nghiệp.
           </p>
         </div>
 
@@ -97,15 +97,15 @@ export default function LoginPage() {
           <div style={styles.testiBody}>
             <div style={styles.testiHeader}>
               <div>
-                <div style={styles.testiName}>Nguyen Van An</div>
-                <div style={styles.testiRole}>Admin &middot; Ban Giam Doc</div>
+                <div style={styles.testiName}>Nguyễn Văn An</div>
+                <div style={styles.testiRole}>Admin · Ban Giám Đốc</div>
               </div>
               <div style={styles.testiStars}>
                 {[...Array(5)].map((_, i) => <i key={i} className="ri-star-fill" />)}
               </div>
             </div>
             <div style={styles.testiQuote}>
-              &ldquo;He thong giup chung toi kiem soat kho hang chinh xac hon 90%, tiet kiem nhieu gio lam viec.&rdquo;
+              &ldquo;Hệ thống giúp chúng tôi kiểm soát kho hàng chính xác hơn 90%, tiết kiệm nhiều giờ làm việc.&rdquo;
             </div>
           </div>
         </div>
@@ -120,8 +120,8 @@ export default function LoginPage() {
         <div style={styles.formWrap} className="login-form-wrap">
 
           <div style={styles.formHeader}>
-            <h2 style={styles.formTitle}>Chao mui tro lai!</h2>
-            <p style={styles.formSub}>Dang nhap de tiep tuc quan ly kho hang</p>
+            <h2 style={styles.formTitle}>Chào mừng trở lại!</h2>
+            <p style={styles.formSub}>Đăng nhập để tiếp tục quản lý kho hàng</p>
           </div>
 
           <form onSubmit={handleLogin} style={styles.form}>
