@@ -41,8 +41,15 @@ async function setup() {
         )`);
         await client.query(`CREATE TABLE IF NOT EXISTS warehouses (
             id SERIAL PRIMARY KEY, warehouse_code VARCHAR(50) UNIQUE NOT NULL,
-            name VARCHAR(100) NOT NULL, location TEXT
+            name VARCHAR(100) NOT NULL, location TEXT,
+            warehouse_type VARCHAR(30) DEFAULT NULL
         )`);
+        await client.query(`CREATE TABLE IF NOT EXISTS auto_codes (
+            code VARCHAR(50) PRIMARY KEY,
+            prefix VARCHAR(20) NOT NULL,
+            year INTEGER NOT NULL
+        )`);
+        await client.query(`CREATE INDEX IF NOT EXISTS idx_auto_codes_prefix_year ON auto_codes(prefix, year)`);
         await client.query(`CREATE TABLE IF NOT EXISTS products (
             id SERIAL PRIMARY KEY, sku VARCHAR(50) UNIQUE NOT NULL, name VARCHAR(255) NOT NULL,
             unit VARCHAR(50), category VARCHAR(100), image_url TEXT, min_stock INTEGER DEFAULT 50,
@@ -66,9 +73,22 @@ async function setup() {
             customer_id INTEGER REFERENCES customers(id), order_date TIMESTAMP NOT NULL,
             expected_delivery_date TIMESTAMP, actual_delivery_date TIMESTAMP,
             created_by INTEGER REFERENCES users(id), status VARCHAR(50) DEFAULT 'draft',
+            delivery_step INTEGER DEFAULT 0,
             note TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )`);
+        await client.query(`DO $$ BEGIN
+            ALTER TABLE production_receipts ADD COLUMN IF NOT EXISTS defect_type VARCHAR(50);
+        EXCEPTION WHEN others THEN NULL;
+        END $$`);
+        await client.query(`DO $$ BEGIN
+            ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS delivery_step INTEGER DEFAULT 0;
+        EXCEPTION WHEN others THEN NULL;
+        END $$`);
+        await client.query(`DO $$ BEGIN
+            ALTER TABLE inventory_transactions ADD COLUMN IF NOT EXISTS note TEXT;
+        EXCEPTION WHEN others THEN NULL;
+        END $$`);
         await client.query(`CREATE TABLE IF NOT EXISTS sales_order_items (
             id SERIAL PRIMARY KEY, order_id INTEGER REFERENCES sales_orders(id) ON DELETE CASCADE,
             product_id INTEGER REFERENCES products(id), quantity INTEGER NOT NULL,
@@ -107,9 +127,140 @@ async function setup() {
         await client.query(`CREATE INDEX IF NOT EXISTS idx_inventory_balances_product ON inventory_balances(product_id)`);
         await client.query(`CREATE INDEX IF NOT EXISTS idx_inventory_transactions_product ON inventory_transactions(product_id)`);
         await client.query(`CREATE INDEX IF NOT EXISTS idx_inventory_transactions_type ON inventory_transactions(transaction_type)`);
-        await client.query(`CREATE INDEX IF NOT EXISTS idx_sales_orders_status ON sales_orders(status)`);
+        await client.query(`CREATE TABLE IF NOT EXISTS shipping_orders (
+            id SERIAL PRIMARY KEY,
+            order_id INTEGER REFERENCES sales_orders(id),
+            carrier_code VARCHAR(20) NOT NULL,
+            carrier_name VARCHAR(100) NOT NULL,
+            tracking_no VARCHAR(100) UNIQUE NOT NULL,
+            shipping_fee DECIMAL(15, 2) DEFAULT 0,
+            status VARCHAR(30) DEFAULT 'assigned',
+            assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            shipped_at TIMESTAMP,
+            delivered_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`);
+        await client.query(`CREATE INDEX IF NOT EXISTS idx_shipping_orders_order ON shipping_orders(order_id)`);
+
+        // ====== RETURNS & COMPENSATIONS ======
+        await client.query(`CREATE TABLE IF NOT EXISTS return_requests (
+            id SERIAL PRIMARY KEY,
+            order_id INTEGER REFERENCES sales_orders(id) UNIQUE,
+            customer_reject_reason VARCHAR(50),
+            customer_reject_detail TEXT,
+            complaint_source VARCHAR(30),
+            logistics_action VARCHAR(50),
+            logistics_note TEXT,
+            handling_result VARCHAR(50),
+            compensation_no VARCHAR(50),
+            factory_acknowledged BOOLEAN DEFAULT FALSE,
+            factory_responded_at TIMESTAMP,
+            status VARCHAR(30) DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`);
+        await client.query(`DO $$ BEGIN ALTER TABLE return_requests ADD CONSTRAINT return_requests_order_id_key UNIQUE (order_id); EXCEPTION WHEN others THEN NULL; END $$`);
+        await client.query(`DO $$ BEGIN ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS delivery_step INTEGER DEFAULT 0; EXCEPTION WHEN others THEN NULL; END $$`);
+        await client.query(`DO $$ BEGIN ALTER TABLE inventory_transactions ADD COLUMN IF NOT EXISTS note TEXT; EXCEPTION WHEN others THEN NULL; END $$`);
+        await client.query(`CREATE INDEX IF NOT EXISTS idx_return_requests_order ON return_requests(order_id)`);
+
+        await client.query(`CREATE TABLE IF NOT EXISTS return_items (
+            id SERIAL PRIMARY KEY,
+            return_id INTEGER REFERENCES return_requests(id) ON DELETE CASCADE,
+            product_id INTEGER REFERENCES products(id),
+            quantity INTEGER NOT NULL,
+            is_defective BOOLEAN DEFAULT true,
+            handled_by INTEGER REFERENCES users(id),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`);
+        await client.query(`CREATE INDEX IF NOT EXISTS idx_return_items_return ON return_items(return_id)`);
+
+        // compensation_requests: ton tai truoc return_requests (do return_requests tham chieu no qua return_id)
+        await client.query(`CREATE TABLE IF NOT EXISTS compensation_requests (
+            id SERIAL PRIMARY KEY,
+            compensation_no VARCHAR(50) UNIQUE NOT NULL,
+            return_id INTEGER REFERENCES return_requests(id),
+            order_id INTEGER REFERENCES sales_orders(id),
+            warehouse_id INTEGER REFERENCES warehouses(id),
+            defect_type VARCHAR(30),
+            total_items INTEGER DEFAULT 0,
+            status VARCHAR(30) DEFAULT 'pending',
+            resolution_note TEXT,
+            responded_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`);
+        await client.query(`CREATE INDEX IF NOT EXISTS idx_compensation_requests_return ON compensation_requests(return_id)`);
+        await client.query(`CREATE INDEX IF NOT EXISTS idx_compensation_requests_status ON compensation_requests(status)`);
+
+        // compensation_items: ton tai truoc compensation_requests (do compensation_requests tham chieu no qua compensation_id)
+        await client.query(`CREATE TABLE IF NOT EXISTS compensation_items (
+            id SERIAL PRIMARY KEY,
+            compensation_id INTEGER REFERENCES compensation_requests(id) ON DELETE CASCADE,
+            product_id INTEGER REFERENCES products(id),
+            defective_qty INTEGER NOT NULL,
+            unit_price DECIMAL(15, 2) DEFAULT 0
+        )`);
+        await client.query(`CREATE INDEX IF NOT EXISTS idx_compensation_items_compensation ON compensation_items(compensation_id)`);
         await client.query(`CREATE INDEX IF NOT EXISTS idx_sales_order_items_order ON sales_order_items(order_id)`);
         await client.query(`CREATE INDEX IF NOT EXISTS idx_delivery_requests_order ON delivery_requests(order_id)`);
+
+        // ====== CLAIMS (ĐÒI BỒI THƯỜNG) ======
+        await client.query(`CREATE TABLE IF NOT EXISTS supplier_claims (
+            id SERIAL PRIMARY KEY,
+            claim_no VARCHAR(50) UNIQUE NOT NULL,
+            return_id INTEGER REFERENCES return_requests(id),
+            order_id INTEGER REFERENCES sales_orders(id),
+            warehouse_id INTEGER REFERENCES warehouses(id),
+            defect_reason VARCHAR(100),
+            total_items INTEGER DEFAULT 0,
+            status VARCHAR(30) DEFAULT 'pending',
+            sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            resolved_at TIMESTAMP,
+            resolution_note TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`);
+        await client.query(`CREATE INDEX IF NOT EXISTS idx_supplier_claims_return ON supplier_claims(return_id)`);
+        await client.query(`CREATE INDEX IF NOT EXISTS idx_supplier_claims_status ON supplier_claims(status)`);
+
+        await client.query(`CREATE TABLE IF NOT EXISTS carrier_claims (
+            id SERIAL PRIMARY KEY,
+            claim_no VARCHAR(50) UNIQUE NOT NULL,
+            return_id INTEGER REFERENCES return_requests(id),
+            order_id INTEGER REFERENCES sales_orders(id),
+            carrier_code VARCHAR(20),
+            carrier_name VARCHAR(100),
+            warehouse_id INTEGER REFERENCES warehouses(id),
+            defect_reason VARCHAR(100),
+            total_items INTEGER DEFAULT 0,
+            estimated_amount DECIMAL(15,2) DEFAULT 0,
+            status VARCHAR(30) DEFAULT 'pending',
+            sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            resolved_at TIMESTAMP,
+            resolution_note TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`);
+        await client.query(`CREATE INDEX IF NOT EXISTS idx_carrier_claims_return ON carrier_claims(return_id)`);
+        await client.query(`CREATE INDEX IF NOT EXISTS idx_carrier_claims_status ON carrier_claims(status)`);
+
+        // ====== NOTIFICATIONS (THÔNG BÁO) ======
+        await client.query(`CREATE TABLE IF NOT EXISTS notifications (
+            id SERIAL PRIMARY KEY,
+            recipient_role VARCHAR(30) NOT NULL,
+            recipient_user_id INTEGER REFERENCES users(id),
+            title VARCHAR(255) NOT NULL,
+            message TEXT,
+            type VARCHAR(30) DEFAULT 'info',
+            reference_type VARCHAR(30),
+            reference_id INTEGER,
+            is_read BOOLEAN DEFAULT false,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`);
+        await client.query(`CREATE INDEX IF NOT EXISTS idx_notifications_recipient ON notifications(recipient_role, is_read)`);
+        await client.query(`CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(recipient_user_id, is_read)`);
 
         console.log('   ✓ Tat ca bang da tao!\n');
 
@@ -142,8 +293,9 @@ async function setup() {
         console.log('   ✓ Users (mat khau: 123456)');
 
         await client.query(`
-            INSERT INTO warehouses (warehouse_code, name, location) VALUES
-            ('KHO-MAIN', 'Kho Chinh Binh Duong', 'So 1, Duong So 2, KCN Song Than, Binh Duong')
+            INSERT INTO warehouses (warehouse_code, name, location, warehouse_type) VALUES
+            ('KHO-MAIN', 'Kho Chinh Binh Duong', 'So 1, Duong So 2, KCN Song Than, Binh Duong', 'main'),
+            ('KHO-LOI',  'Kho Hang Loi / Hu Hong', 'Khu vuc cach ly, KCN Song Than, Binh Duong', 'defective')
             ON CONFLICT (warehouse_code) DO NOTHING
         `);
         console.log('   ✓ Warehouses');
@@ -154,28 +306,53 @@ async function setup() {
             ['IPH-15P', 'iPhone 15 Pro Max 256GB', 'Chiec', 'Dien thoai', 29500000, 50],
             ['MON-LG27', 'Man hinh LG 27 inch 4K', 'Bo', 'Phu kien', 8500000, 50],
             ['KEY-MX', 'Ban phim co Logitech MX Mechanical', 'Cai', 'Phu kien', 3200000, 50],
+            ['SPH-A24', 'Samsung Galaxy A24 128GB', 'Chiec', 'Dien thoai', 7200000, 80],
+            ['SPH-XIA', 'Xiaomi Redmi Note 13 Pro', 'Chiec', 'Dien thoai', 6500000, 80],
+            ['TAB-S9F', 'Samsung Galaxy Tab S9 FE', 'Chiec', 'Tablet', 14500000, 30],
+            ['HDP-SONY', 'Tai nghe Sony WH-1000XM5', 'Chiec', 'Phu kien', 8900000, 40],
+            ['HDP-AIR', 'AirPods Pro 2 USB-C', 'Chiec', 'Phu kien', 6500000, 60],
+            ['CHU-MX', 'Chuot Logitech MX Master 3S', 'Chiec', 'Phu kien', 4200000, 70],
+            ['MON-DELL', 'Man hinh Dell 27 inch FHD', 'Bo', 'Phu kien', 7800000, 40],
+            ['LAP-HP', 'HP Pavilion 15 Ryzen 7', 'Cai', 'Laptop', 18500000, 30],
+            ['LAP-LEG', 'Lenovo IdeaPad Gaming 5', 'Cai', 'Laptop', 21000000, 25],
+            ['SPH-VIV', 'Vivo V30e 5G', 'Chiec', 'Dien thoai', 9800000, 50],
         ];
         for (const [sku, name, unit, cat, price, min] of products) {
             await client.query(`INSERT INTO products (sku, name, unit, category, sale_price, min_stock)
                 VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (sku) DO NOTHING`,
                 [sku, name, unit, cat, price, min]);
         }
-        console.log('   ✓ Products');
+        console.log(`   ✓ ${products.length} Products`);
 
         const customers = [
             ['KH-TGDD', 'The Gioi Di Dong (MWG)', '18001060', 'Khu cong nghe cao, Quan 9, TPHCM', 'Anh Hieu (Phong Thu Mua)', 2],
             ['KH-FPT', 'FPT Retail', '18006601', '261 Khanh Hoi, Quan 4, TPHCM', 'Chi Mai (Quan ly chuoi)', 2],
             ['KH-PV', 'Phong Vu Computer', '18006867', '214 Quan Thanh, Ba Dinh, Ha Noi', 'Anh Nam (Giam doc kinh doanh)', 2],
             ['KH-CELL', 'CellphoneS', '18002097', '115 Thai Ha, Dong Da, Ha Noi', 'Chi Linh (Truong phong cung ung)', 2],
+            ['KH-HNDM', 'Hoang Ha Mobile', '19001071', '123 Le Dai Hanh, Quan 11, TPHCM', 'Anh Tuan (Giam doc chien luoc)', 2],
+            ['KH-MRT', 'Mai Rong Tay Media', '02838123456', '45 Nguyen Hue, Quan 1, TPHCM', 'Chi Ngoc (Truong phong IT)', 2],
+            ['KH-TIKI', 'Tiki Trading', '19006034', 'L2-03, Etown 3, Quan Tan Binh, TPHCM', 'Anh Duc (Procurement Lead)', 2],
+            ['KH-SHOP', 'Shopee Express', '0909123456', 'Khu logistics Binh Chanh, TPHCM', 'Chi Lien (Quan ly kho)', 2],
+            ['KH-LAZA', 'Lazada Vietnam', '18001234', 'Saigon Centre, Quan 1, TPHCM', 'Anh Phuc (Operations Manager)', 2],
+            ['KH-BACH', 'Bach Hoa Xanh', '18006888', 'KCN Tan Binh, TPHCM', 'Chi Ha (Giam doc mua hang)', 2],
+            ['KH-WINM', 'Walmart Minh', '0938123456', '54 Pho Cuong, Quan 2, Ha Noi', 'Anh Son (Chief Buyer)', 2],
+            ['KH-ELAND', 'E-Land VN', '02862999999', 'Nam Ky Khoi Nghia, Quan 3, TPHCM', 'Chi Oanh (Sales Director)', 2],
         ];
         for (const [code, company, phone, addr, contact, createdBy] of customers) {
             await client.query(`INSERT INTO customers (customer_code, company_name, phone, address, contact_person, created_by)
                 VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (customer_code) DO NOTHING`,
                 [code, company, phone, addr, contact, createdBy]);
         }
-        console.log('   ✓ Customers');
+        console.log(`   ✓ ${customers.length} Customers`);
 
-        console.log('\n========================================');
+        await client.query(`INSERT INTO auto_codes (code, prefix, year) VALUES
+            ('GHN-2026-0001', 'GHN', 2026),
+            ('GR-2026-0001',  'GR',  2026),
+            ('GHT-2026-0001','GHT', 2026),
+            ('CLS-2026-0001','CLS', 2026),
+            ('CLC-2026-0001','CLC', 2026)
+            ON CONFLICT (code) DO NOTHING`);
+        console.log('   ✓ Shipping prefixes');        console.log('\n========================================');
         console.log('Setup thanh cong! Tat ca mat khau: 123456');
         console.log('========================================');
         console.log('  admin@congty.com     / 123456 (Admin)');

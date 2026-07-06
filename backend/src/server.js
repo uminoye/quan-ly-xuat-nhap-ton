@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
 
 const app = express();
 
@@ -41,6 +42,7 @@ const orderRoutes = require('./routes/order.routes');
 const receiptRoutes = require('./routes/receipt.routes');
 const logisticsRoutes = require('./routes/logistics.routes');
 const outboundRoutes = require('./routes/outbound.routes');
+const returnRoutes = require('./routes/return.routes');
 const reportRoutes = require('./routes/report.routes');
 const warehouseRoutes = require('./routes/warehouse.routes');
 const uploadRoutes = require('./routes/upload.routes');
@@ -62,13 +64,14 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/receipts', receiptRoutes);
 app.use('/api/logistics', logisticsRoutes);
 app.use('/api/outbounds', outboundRoutes);
+app.use('/api/returns', returnRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/warehouses', warehouseRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/uploads', express.static(path.resolve(__dirname, '../../uploads')));
 
 // --- ERROR HANDLING ---
-app.use((err, _req, res, _next) => {
+app.use((err, req, res, next) => {
     console.error('LOI HE THONG:', err.stack);
     res.status(500).json({ message: 'Da co loi xay ra tren server!', error: err.message });
 });

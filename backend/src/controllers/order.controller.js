@@ -1,5 +1,36 @@
 const db = require('../config/database');
-const generateCode = require('../utils/autoCode');
+
+const getNextOrderNo = async (req, res) => {
+    const client = await db.pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        const year = new Date().getFullYear();
+        const pattern = `SO-${year}-%`;
+
+        const maxRes = await client.query(
+            `SELECT order_no FROM sales_orders WHERE order_no LIKE $1 ORDER BY order_no DESC LIMIT 1 FOR UPDATE`,
+            [pattern]
+        );
+        console.log('[getNextOrderNo] maxRes.rows:', maxRes.rows);
+
+        let nextNum = 1;
+        if (maxRes.rows[0]?.order_no) {
+            const lastNum = parseInt(maxRes.rows[0].order_no.split('-').pop(), 10);
+            nextNum = isNaN(lastNum) ? 1 : lastNum + 1;
+        }
+        const order_no = `SO-${year}-${String(nextNum).padStart(4, '0')}`;
+        console.log('[getNextOrderNo] returning:', order_no);
+
+        await client.query('COMMIT');
+        res.status(200).json({ order_no });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ message: 'Loi sinh ma don', error: err.message });
+    } finally {
+        client.release();
+    }
+};
 
 const getAllOrders = async (req, res) => {
     try {
@@ -14,9 +45,18 @@ const getAllOrders = async (req, res) => {
                 o.actual_delivery_date,
                 o.created_by,
                 o.status,
+                o.delivery_step,
                 o.note,
                 o.created_at,
                 o.updated_at,
+                (
+                    SELECT dr.warehouse_note FROM delivery_requests dr
+                    WHERE dr.order_id = o.id ORDER BY dr.id DESC LIMIT 1
+                ) AS warehouse_note,
+                (
+                    SELECT dr.logistics_note FROM delivery_requests dr
+                    WHERE dr.order_id = o.id ORDER BY dr.id DESC LIMIT 1
+                ) AS logistics_note,
                 oi.id as item_id,
                 oi.product_id,
                 oi.quantity,
@@ -44,7 +84,10 @@ const getAllOrders = async (req, res) => {
                     actual_delivery_date: row.actual_delivery_date,
                     created_by: row.created_by,
                     status: row.status,
+                    delivery_step: row.delivery_step,
                     note: row.note,
+                    warehouse_note: row.warehouse_note,
+                    logistics_note: row.logistics_note,
                     created_at: row.created_at,
                     updated_at: row.updated_at,
                     items: [],
@@ -86,19 +129,40 @@ const createOrder = async (req, res) => {
         if (!items || items.length === 0) return res.status(400).json({ message: 'Phai co san pham!' });
 
         await client.query('BEGIN');
-        const order_no = await generateCode('order');
+
+        // Tìm số lớn nhất từ bảng sales_orders, lock để tránh race condition
+        const year = new Date().getFullYear();
+        const pattern = `SO-${year}-%`;
+        const maxRes = await client.query(
+            `SELECT order_no FROM sales_orders WHERE order_no LIKE $1 ORDER BY order_no DESC LIMIT 1 FOR UPDATE`,
+            [pattern]
+        );
+        console.log('[createOrder] maxRes.rows:', maxRes.rows, 'year:', year, 'pattern:', pattern);
+
+        let nextNum = 1;
+        if (maxRes.rows[0]?.order_no) {
+            const lastNum = parseInt(maxRes.rows[0].order_no.split('-').pop(), 10);
+            nextNum = isNaN(lastNum) ? 1 : lastNum + 1;
+        }
+        const order_no = `SO-${year}-${String(nextNum).padStart(4, '0')}`;
+        console.log('[createOrder] order_no generated:', order_no);
+
+        // Insert đơn hàng
         const result = await client.query(
             `INSERT INTO sales_orders (order_no, customer_id, order_date, expected_delivery_date, note, status)
              VALUES ($1, $2, $3, $4, $5, 'pending') RETURNING id`,
             [order_no, customer_id, order_date, expected_delivery_date, note]
         );
         const orderId = result.rows[0].id;
+
+        // Insert các sản phẩm
         for (const item of items) {
             await client.query(
                 `INSERT INTO sales_order_items (order_id, product_id, quantity, unit_price) VALUES ($1, $2, $3, $4)`,
                 [orderId, item.product_id, item.quantity, item.unit_price]
             );
         }
+
         await client.query('COMMIT');
         res.status(201).json({ message: 'Tao don hang thanh cong', id: orderId, order_no });
     } catch (err) {
@@ -143,7 +207,7 @@ const deleteOrder = async (req, res) => {
         const order = await client.query(`SELECT status FROM sales_orders WHERE id = $1`, [id]);
         if (!order.rows.length) return res.status(404).json({ message: 'Khong tim thay don hang' });
         const currentStatus = order.rows[0].status || 'pending';
-        if (currentStatus !== 'pending' && currentStatus !== 'returned') {
+        if (!['pending', 'returned', 'waiting_sales', 'return_to_sales'].includes(currentStatus)) {
             return res.status(400).json({ message: 'Khong the xoa don hang da duoc xu ly!' });
         }
         await client.query('BEGIN');
@@ -158,6 +222,7 @@ const deleteOrder = async (req, res) => {
         }
         await client.query(`DELETE FROM stock_outbound_notes WHERE order_id = $1`, [id]);
         await client.query(`DELETE FROM delivery_requests WHERE order_id = $1`, [id]);
+        await client.query(`DELETE FROM shipping_orders WHERE order_id = $1`, [id]);
         await client.query(`DELETE FROM sales_order_items WHERE order_id = $1`, [id]);
         await client.query(`DELETE FROM sales_orders WHERE id = $1`, [id]);
         await client.query('COMMIT');
@@ -287,7 +352,103 @@ const returnInventory = async (req, res) => {
     }
 };
 
+const processCustomerRejection = async (req, res) => {
+    const client = await db.pool.connect();
+    try {
+        const orderId = req.params.id;
+        const { action, note } = req.body; // action: 'return_to_warehouse' | 'return_pending'
+        await client.query('BEGIN');
+
+        // Lấy thông tin outbound để biết kho nào
+        const outbound = await client.query(
+            `SELECT warehouse_id FROM stock_outbound_notes WHERE order_id = $1 ORDER BY id DESC LIMIT 1`,
+            [orderId]
+        );
+
+        if (action === 'return_to_warehouse') {
+            // Hoàn đơn lại vào kho đã xuất
+            if (outbound.rows.length > 0) {
+                const warehouseId = outbound.rows[0].warehouse_id;
+                const items = await client.query(`SELECT product_id, quantity FROM sales_order_items WHERE order_id = $1`, [orderId]);
+                for (const item of items.rows) {
+                    await client.query(
+                        `UPDATE inventory_balances SET on_hand_qty = COALESCE(on_hand_qty, 0) + $1, updated_at = CURRENT_TIMESTAMP WHERE product_id = $2 AND warehouse_id = $3`,
+                        [item.quantity, item.product_id, warehouseId]
+                    );
+                }
+            }
+            await client.query(
+                `UPDATE sales_orders SET status = 'canceled', actual_delivery_date = NULL, note = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+                [note || 'Khach tu choi nhan don - da hoan tra kho', orderId]
+            );
+        } else {
+            // Chuyển qua xu ly hoan
+            await client.query(
+                `UPDATE sales_orders SET status = 'return_pending', note = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+                [note || 'Khach tu choi nhan don - chuyen xu ly hoan', orderId]
+            );
+        }
+
+        await client.query('COMMIT');
+        res.status(200).json({
+            message: action === 'return_to_warehouse'
+                ? 'Da hoan don lai vao kho!'
+                : 'Da chuyen don sang xu ly hoan!'
+        });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ message: 'Loi xu ly yeu cau tra hang', error: err.message });
+    } finally {
+        client.release();
+    }
+};
+
+// ============================================================
+// PUT /orders/:id/return-to-sales
+// Logistics gửi đơn khách không nhận về cho Sales xử lý
+// ============================================================
+const returnToSales = async (req, res) => {
+    const client = await db.pool.connect();
+    try {
+        const orderId = req.params.id;
+        const { note } = req.body;
+
+        await client.query('BEGIN');
+
+        // Lấy return_request hiện tại
+        const rrRes = await client.query(`SELECT id FROM return_requests WHERE order_id = $1`, [orderId]);
+        if (rrRes.rows.length) {
+            await client.query(`
+                UPDATE return_requests SET status = 'return_to_sales',
+                customer_reject_reason = 'khong_nhan_hang', complaint_source = 'during_delivery',
+                logistics_note = $1, updated_at = CURRENT_TIMESTAMP
+                WHERE order_id = $2
+            `, [note || null, orderId]);
+        }
+
+        // Chuyển đơn về return_to_sales (Sales tự quyết định)
+        await client.query(`
+            UPDATE sales_orders SET status = 'return_to_sales', note = COALESCE(note || E'\n', '') || $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2
+        `, [`[Logistics] Khach khong nhan hang: ${note || ''}`, orderId]);
+
+        // Ghi log
+        await client.query(`
+            INSERT INTO delivery_requests (order_id, status, logistics_note)
+            VALUES ($1, 'return_to_sales', $2)
+        `, [orderId, note || 'Logistics gui don ve Sales']);
+
+        await client.query('COMMIT');
+        res.status(200).json({ message: 'Da gui don ve Sales xu ly!' });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ message: 'Loi gui don ve Sales', error: err.message });
+    } finally {
+        client.release();
+    }
+};
+
 module.exports = {
-    getAllOrders, getOrderItems, createOrder, updateOrder, deleteOrder,
-    processLogistics, reportWarehouseIssue, exportOrder, confirmDelivery, returnInventory
+    getAllOrders, getNextOrderNo, getOrderItems, createOrder, updateOrder, deleteOrder,
+    processLogistics, reportWarehouseIssue, exportOrder, confirmDelivery, returnInventory,
+    processCustomerRejection, returnToSales
 };

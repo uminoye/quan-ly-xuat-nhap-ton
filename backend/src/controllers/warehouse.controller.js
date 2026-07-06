@@ -3,11 +3,26 @@ const db = require('../config/database');
 const getAllWarehouses = async (req, res) => {
     try {
         console.log('[WAREHOUSE] GET all - userId:', req.userId);
-        const rows = await db.getAll(`SELECT id, warehouse_code, name, location FROM warehouses ORDER BY id ASC`);
+        const rows = await db.getAll(`SELECT id, warehouse_code, name, location, warehouse_type FROM warehouses ORDER BY id ASC`);
         console.log('[WAREHOUSE] GET all - rows:', rows.length);
         res.status(200).json(rows);
     } catch (err) {
         console.error('[WAREHOUSE] GET all error:', err.code, err.message);
+        res.status(500).json({ message: 'Loi lay danh sach kho', detail: err.message });
+    }
+};
+
+const getWarehousesForOutbound = async (req, res) => {
+    try {
+        const rows = await db.getAll(`
+            SELECT id, warehouse_code, name, location, warehouse_type
+            FROM warehouses
+            WHERE (warehouse_type IS NULL OR warehouse_type != 'defective')
+            AND warehouse_code != 'KHO-LOI'
+            ORDER BY id ASC
+        `);
+        res.status(200).json(rows);
+    } catch (err) {
         res.status(500).json({ message: 'Loi lay danh sach kho', detail: err.message });
     }
 };
@@ -33,6 +48,51 @@ const createWarehouse = async (req, res) => {
     }
 };
 
+const getDefectiveOrders = async (req, res) => {
+    try {
+        const rows = await db.getAll(`
+            SELECT
+                rr.id, rr.order_id, rr.logistics_action, rr.handling_result,
+                rr.complaint_source, rr.status, rr.created_at, rr.updated_at,
+                so.order_no,
+                c.company_name AS customer_name,
+                so.expected_delivery_date, so.actual_delivery_date,
+                (
+                    SELECT COALESCE(
+                        (SELECT w.name FROM stock_outbound_notes son
+                         JOIN warehouses w ON w.id = son.warehouse_id
+                         WHERE son.order_id = so.id ORDER BY son.id DESC LIMIT 1),
+                        (SELECT w.name FROM production_receipts pr
+                         JOIN warehouses w ON w.id = pr.warehouse_id
+                         WHERE pr.note LIKE '%' || so.order_no || '%' ORDER BY pr.id DESC LIMIT 1),
+                        'Kho lỗi'
+                    )
+                ) AS warehouse_name,
+                (
+                    SELECT json_agg(json_build_object(
+                        'product_id', soi.product_id,
+                        'product_name', p.name,
+                        'sku', p.sku,
+                        'quantity', soi.quantity,
+                        'unit_price', COALESCE(soi.unit_price, p.sale_price, 0)
+                    )) FILTER (WHERE soi.product_id IS NOT NULL)
+                    FROM sales_order_items soi
+                    LEFT JOIN products p ON p.id = soi.product_id
+                    WHERE soi.order_id = so.id
+                ) AS order_items
+            FROM return_requests rr
+            JOIN sales_orders so ON rr.order_id = so.id
+            JOIN customers c ON so.customer_id = c.id
+            WHERE rr.logistics_action IN ('loi_van_tai', 'loi_nha_may')
+            ORDER BY rr.created_at DESC
+        `);
+        res.status(200).json(rows);
+    } catch (err) {
+        console.error('[getDefectiveOrders] error:', err.message);
+        res.status(500).json({ message: 'Loi lay danh sach don loi', error: err.message });
+    }
+};
+
 const deleteWarehouse = async (req, res) => {
     const client = await db.pool.connect();
     try {
@@ -55,4 +115,4 @@ const deleteWarehouse = async (req, res) => {
     }
 };
 
-module.exports = { getAllWarehouses, createWarehouse, deleteWarehouse };
+module.exports = { getAllWarehouses, getWarehousesForOutbound, createWarehouse, deleteWarehouse, getDefectiveOrders };

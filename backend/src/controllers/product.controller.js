@@ -33,83 +33,95 @@ const getAllProducts = async (req, res) => {
 };
 
 const createProduct = async (req, res) => {
-    const client = await db.pool.connect();
-    try {
-        const { name, sale_price, unit, category, image_url, min_stock, warehouse_id, initial_stock } = req.body;
+    const MAX_RETRIES = 5;
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        const client = await db.pool.connect();
+        try {
+            const { name, sale_price, unit, category, image_url, min_stock, warehouse_id, initial_stock } = req.body;
 
-        // Validate
-        if (!name || String(name).trim().length === 0) {
-            return res.status(400).json({ message: 'Vui long nhap Ten san pham' });
-        }
-        if (!sale_price || isNaN(Number(sale_price)) || Number(sale_price) <= 0) {
-            return res.status(400).json({ message: 'Vui long nhap Don gia hop le' });
-        }
+            if (!name || String(name).trim().length === 0) {
+                client.release();
+                return res.status(400).json({ message: 'Vui long nhap Ten san pham' });
+            }
+            if (!sale_price || isNaN(Number(sale_price)) || Number(sale_price) <= 0) {
+                client.release();
+                return res.status(400).json({ message: 'Vui long nhap Don gia hop le' });
+            }
 
-        await client.query('BEGIN');
+            await client.query('BEGIN');
 
-        // Sinh SKU trong cùng transaction
-        const prefix = 'SP';
-        const year = new Date().getFullYear();
-        const pattern = `${prefix}-${year}-%`;
-        const lockRes = await client.query(
-            `SELECT code FROM auto_codes WHERE code LIKE $1 ORDER BY code DESC LIMIT 1 FOR UPDATE`,
-            [pattern]
-        );
-        let nextNum = 1;
-        if (lockRes.rows[0]?.code) {
-            const lastNum = parseInt(lockRes.rows[0].code.split('-').pop(), 10);
-            nextNum = isNaN(lastNum) ? 1 : lastNum + 1;
-        }
-        const sku = `${prefix}-${year}-${String(nextNum).padStart(4, '0')}`;
-        await client.query(
-            `INSERT INTO auto_codes (code, prefix, year) VALUES ($1, $2, $3) ON CONFLICT (code) DO NOTHING`,
-            [sku, prefix, year]
-        );
+            // Sinh SKU trong cùng transaction với FOR UPDATE lock để tránh trùng
+            const prefix = 'SP';
+            const year = new Date().getFullYear();
+            const pattern = `${prefix}-${year}-%`;
+            const lockRes = await client.query(
+                `SELECT code FROM auto_codes WHERE code LIKE $1 ORDER BY code DESC LIMIT 1 FOR UPDATE`,
+                [pattern]
+            );
+            let nextNum = 1;
+            if (lockRes.rows[0]?.code) {
+                const lastNum = parseInt(lockRes.rows[0].code.split('-').pop(), 10);
+                nextNum = isNaN(lastNum) ? 1 : lastNum + 1;
+            }
+            const sku = `${prefix}-${year}-${String(nextNum).padStart(4, '0')}`;
+            await client.query(
+                `INSERT INTO auto_codes (code, prefix, year) VALUES ($1, $2, $3) ON CONFLICT (code) DO NOTHING`,
+                [sku, prefix, year]
+            );
 
-        // Insert san pham
-        const insertRes = await client.query(
-            `INSERT INTO products (sku, name, sale_price, unit, category, image_url, min_stock)
-             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-            [sku, String(name).trim(), Number(sale_price), unit || 'Cai', category || null, image_url || null, parseInt(min_stock, 10) || 50]
-        );
-        const productId = insertRes.rows[0].id;
-        const stockQty = parseInt(initial_stock, 10) || 0;
+            // Insert san pham
+            const insertRes = await client.query(
+                `INSERT INTO products (sku, name, sale_price, unit, category, image_url, min_stock)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+                [sku, String(name).trim(), Number(sale_price), unit || 'Cai', category || null, image_url || null, parseInt(min_stock, 10) || 50]
+            );
+            const productId = insertRes.rows[0].id;
+            const stockQty = parseInt(initial_stock, 10) || 0;
 
-        if (stockQty > 0) {
-            if (warehouse_id === 'all') {
-                const whRes = await client.query(`SELECT id FROM warehouses`);
-                for (const row of whRes.rows) {
+            if (stockQty > 0) {
+                if (warehouse_id === 'all') {
+                    const whRes = await client.query(`SELECT id FROM warehouses`);
+                    for (const row of whRes.rows) {
+                        await client.query(
+                            `INSERT INTO inventory_balances (warehouse_id, product_id, on_hand_qty)
+                             VALUES ($1, $2, $3)
+                             ON CONFLICT (warehouse_id, product_id) DO UPDATE SET on_hand_qty = $3, updated_at = CURRENT_TIMESTAMP`,
+                            [row.id, productId, stockQty]
+                        );
+                    }
+                } else if (warehouse_id) {
                     await client.query(
                         `INSERT INTO inventory_balances (warehouse_id, product_id, on_hand_qty)
                          VALUES ($1, $2, $3)
                          ON CONFLICT (warehouse_id, product_id) DO UPDATE SET on_hand_qty = $3, updated_at = CURRENT_TIMESTAMP`,
-                        [row.id, productId, stockQty]
+                        [warehouse_id, productId, stockQty]
                     );
                 }
-            } else if (warehouse_id) {
-                await client.query(
-                    `INSERT INTO inventory_balances (warehouse_id, product_id, on_hand_qty)
-                     VALUES ($1, $2, $3)
-                     ON CONFLICT (warehouse_id, product_id) DO UPDATE SET on_hand_qty = $3, updated_at = CURRENT_TIMESTAMP`,
-                    [warehouse_id, productId, stockQty]
-                );
             }
-        }
 
-        await client.query('COMMIT');
-        res.status(201).json({
-            message: stockQty > 0 ? 'Them SP va luu Ton kho thanh cong!' : 'Them san pham thanh cong!',
-            sku
-        });
-    } catch (err) {
-        await client.query('ROLLBACK').catch(() => {});
-        console.error('[createProduct] error:', err.message);
-        if (err.code === '23505') { // unique_violation
-            return res.status(400).json({ message: 'Ma SKU da ton tai! Vui long thu lai.' });
+            await client.query('COMMIT');
+            client.release();
+            return res.status(201).json({
+                message: stockQty > 0 ? 'Them SP va luu Ton kho thanh cong!' : 'Them san pham thanh cong!',
+                sku
+            });
+        } catch (err) {
+            try { await client.query('ROLLBACK'); } catch (_) {}
+            client.release();
+
+            // Unique violation → retry với số tiếp theo
+            if (err.code === '23505' && attempt < MAX_RETRIES) {
+                console.warn(`[createProduct] SKU trung, retry lan ${attempt + 1}`);
+                await new Promise(r => setTimeout(r, 50 * attempt));
+                continue;
+            }
+
+            console.error('[createProduct] error:', err.message);
+            if (err.code === '23505') {
+                return res.status(400).json({ message: 'Ma SKU da ton tai! Vui long thu lai.' });
+            }
+            return res.status(500).json({ message: 'Loi Database', error: err.message });
         }
-        res.status(500).json({ message: 'Loi Database', error: err.message });
-    } finally {
-        client.release();
     }
 };
 
@@ -190,4 +202,38 @@ const deleteProduct = async (req, res) => {
     }
 };
 
-module.exports = { getAllProducts, createProduct, updateProduct, deleteProduct };
+const getNextSku = async (req, res) => {
+    const client = await db.pool.connect();
+    try {
+        const prefix = 'SP';
+        const year = new Date().getFullYear();
+
+        await client.query('BEGIN');
+        const lockRes = await client.query(
+            `SELECT code FROM auto_codes WHERE code LIKE $1 ORDER BY code DESC LIMIT 1 FOR UPDATE`,
+            [`${prefix}-${year}-%`]
+        );
+        let nextNum = 1;
+        if (lockRes.rows[0]?.code) {
+            const lastNum = parseInt(lockRes.rows[0].code.split('-').pop(), 10);
+            nextNum = isNaN(lastNum) ? 1 : lastNum + 1;
+        }
+        const sku = `${prefix}-${year}-${String(nextNum).padStart(4, '0')}`;
+
+        // Reserve it immediately so next call won't return the same SKU
+        await client.query(
+            `INSERT INTO auto_codes (code, prefix, year) VALUES ($1, $2, $3) ON CONFLICT (code) DO NOTHING`,
+            [sku, prefix, year]
+        );
+        await client.query('COMMIT');
+
+        res.status(200).json({ sku });
+    } catch (err) {
+        await client.query('ROLLBACK').catch(() => {});
+        res.status(500).json({ message: 'Loi sinh SKU', error: err.message });
+    } finally {
+        client.release();
+    }
+};
+
+module.exports = { getAllProducts, getNextSku, createProduct, updateProduct, deleteProduct };

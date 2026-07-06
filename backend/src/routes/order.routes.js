@@ -5,6 +5,7 @@ const { verifyToken } = require('../middlewares/auth.middleware');
 
 // Các route cơ bản cho Sales
 router.get('/', verifyToken, orderController.getAllOrders);
+router.get('/next-code', verifyToken, orderController.getNextOrderNo);
 router.get('/:id/items', verifyToken, orderController.getOrderItems);
 router.post('/', verifyToken, orderController.createOrder);
 router.put('/:id', verifyToken, orderController.updateOrder);
@@ -16,5 +17,7 @@ router.put('/:id/issue', verifyToken, orderController.reportWarehouseIssue);
 router.put('/:id/export', verifyToken, orderController.exportOrder);
 router.put('/:id/return-inventory', verifyToken, orderController.returnInventory);
 router.put('/:id/confirm-delivery', verifyToken, orderController.confirmDelivery);
+router.put('/:id/process-customer-rejection', verifyToken, orderController.processCustomerRejection);
+router.put('/:id/return-to-sales', verifyToken, orderController.returnToSales);
 // QUAN TRỌNG: Export trực tiếp biến router
 module.exports = router;

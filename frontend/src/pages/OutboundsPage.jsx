@@ -3,14 +3,20 @@ import ExcelJS from 'exceljs';
 import api from '../services/api';
 
 export default function OutboundsPage() {
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const isAuthorized = [1, 4].includes(user?.role_id);
   const [orders, setOrders] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [isRejectOpen, setIsRejectOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [targetWarehouse, setTargetWarehouse] = useState('');
+  const [warehouseStock, setWarehouseStock] = useState([]);
+  const [rejectReason, setRejectReason] = useState('');
+  const [warehouseAction, setWarehouseAction] = useState('xoa_don');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [warehouseFilter, setWarehouseFilter] = useState('all');
@@ -18,6 +24,29 @@ export default function OutboundsPage() {
   const [isContentVisible, setIsContentVisible] = useState(false);
   const [hoveredStat, setHoveredStat] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  // ── Responsive ──────────────────────────────────────────────────────────────
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== 'undefined' ? window.innerWidth < 768 : false
+  );
+  const [isTablet, setIsTablet] = useState(
+    typeof window !== 'undefined' ? window.innerWidth >= 768 && window.innerWidth < 1200 : false
+  );
+
+  useEffect(() => {
+    const onResize = () => {
+      const w = window.innerWidth;
+      setIsMobile(w < 768);
+      setIsTablet(w >= 768 && w < 1200);
+    };
+    onResize();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  const pagePad = isMobile ? 12 : isTablet ? 16 : 20;
+  const statCols = isMobile ? 2 : isTablet ? 2 : 4;
+  const cardR = isMobile ? 14 : 18;
 
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -36,7 +65,7 @@ export default function OutboundsPage() {
     if (showTableLoading) setLoading(true);
 
     try {
-      const [pendingRes, whRes] = await Promise.all([api.get('/outbounds/pending'), api.get('/warehouses')]);
+      const [pendingRes, whRes] = await Promise.all([api.get('/outbounds/pending'), api.get('/warehouses/for-outbound')]);
       setOrders(pendingRes.data || []);
       setWarehouses(whRes.data || []);
     } catch (error) {
@@ -49,6 +78,16 @@ export default function OutboundsPage() {
   useEffect(() => {
     fetchData({ showTableLoading: true });
   }, []);
+
+  useEffect(() => {
+    if (targetWarehouse) {
+      api.get(`/outbounds/warehouse/${targetWarehouse}/stock`)
+        .then(r => setWarehouseStock(r.data || []))
+        .catch(() => setWarehouseStock([]));
+    } else {
+      setWarehouseStock([]);
+    }
+  }, [targetWarehouse]);
 
   useEffect(() => {
     if (loading) {
@@ -140,10 +179,31 @@ export default function OutboundsPage() {
       alert(res.data.message);
       setIsConfirmOpen(false);
       setTargetWarehouse('');
+      setWarehouseStock([]);
       setSelectedOrder(null);
       await fetchData({ showTableLoading: true });
     } catch (error) {
       alert(error.response?.data?.message || 'Lỗi khi xuất kho');
+    }
+  };
+
+  const handleReject = async (e) => {
+    e.preventDefault();
+    if (!selectedOrder || !rejectReason) return;
+    try {
+      await api.put(`/outbounds/${selectedOrder.id}/respond`, {
+        action: 'reject',
+        reason: rejectReason,
+        warehouse_action: warehouseAction,
+      });
+      alert('Đã gửi từ chối về Sales. Sales sẽ xử lý.');
+      setIsRejectOpen(false);
+      setRejectReason('');
+      setWarehouseAction('xoa_don');
+      setSelectedOrder(null);
+      await fetchData({ showTableLoading: true });
+    } catch (err) {
+      alert('Lỗi: ' + (err.response?.data?.message || err.message));
     }
   };
 
@@ -240,6 +300,7 @@ export default function OutboundsPage() {
         status: statusStyle(order.order_status || order.status).label,
         items: items || 'Không có sản phẩm',
         note: order.delivery_note || order.note || '—',
+        warehouse_note: order.warehouse_note || '—',
         amount: `${getTotalAmount(order).toLocaleString('vi-VN')} đ`,
       });
 
@@ -357,7 +418,7 @@ export default function OutboundsPage() {
 
   const tableWrapStyle = {
     background: '#fff',
-    borderRadius: '20px',
+    borderRadius: cardR,
     border: '1px solid #e8eef5',
     boxShadow: '0 10px 30px rgba(15, 23, 42, 0.04)',
     overflow: 'hidden',
@@ -368,7 +429,7 @@ export default function OutboundsPage() {
 
   const tableStyle = {
     width: '100%',
-    minWidth: '1320px',
+    minWidth: isMobile ? 0 : 900,
     borderCollapse: 'separate',
     borderSpacing: 0,
   };
@@ -429,8 +490,18 @@ export default function OutboundsPage() {
     },
   ];
 
+  if (!isAuthorized) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', color: '#94a3b8', gap: 12 }}>
+        <i className="ri-lock-2-line" style={{ fontSize: 48, color: '#cbd5e1' }} />
+        <h2 style={{ margin: 0, color: '#334155' }}>Bạn không có quyền truy cập trang này</h2>
+        <p style={{ margin: 0, fontSize: 14 }}>Trang Phiếu Xuất Kho chỉ dành cho Admin và Kho.</p>
+      </div>
+    );
+  }
+
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(180deg, #f6f8fc 0%, #eef3f9 100%)', padding: '20px' }}>
+    <div style={{ minHeight: '100vh', background: 'linear-gradient(180deg, #f6f8fc 0%, #eef3f9 100%)', padding: pagePad }}>
       <style>{`
         @keyframes rowFadeIn {
           from {
@@ -482,12 +553,19 @@ export default function OutboundsPage() {
         .modal-panel-animate {
           animation: modalScaleIn 220ms ease-out;
         }
+
+        @media (max-width: 768px) {
+          .ob-stat-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 10px !important; }
+          .ob-filter-row { grid-template-columns: 1fr !important; }
+          .ob-detail-grid { grid-template-columns: 1fr !important; }
+          .ob-modal-grid { grid-template-columns: 1fr !important; }
+        }
       `}</style>
       <div style={{ maxWidth: '1480px', margin: '0 auto' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', marginBottom: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', marginBottom: isMobile ? 10 : 16, flexWrap: 'wrap' }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: '28px', color: '#0f172a', letterSpacing: '-0.02em' }}>Xuất kho</h2>
-            <p style={{ margin: '6px 0 0', color: '#64748b', fontSize: '14px', lineHeight: 1.6 }}>Danh sách đơn chờ xuất, tối ưu cho thao tác nhanh</p>
+            <h2 style={{ margin: 0, fontSize: isMobile ? 22 : 26, color: '#0f172a', letterSpacing: '-0.02em' }}>Xuất kho</h2>
+            <p style={{ margin: '6px 0 0', color: '#64748b', fontSize: isMobile ? 12 : 14, lineHeight: 1.6 }}>Danh sách đơn chờ xuất, tối ưu cho thao tác nhanh</p>
           </div>
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             <button
@@ -547,7 +625,7 @@ export default function OutboundsPage() {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '14px', marginBottom: '16px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${statCols}, minmax(0, 1fr))`, gap: isMobile ? 10 : 14, marginBottom: isMobile ? 12 : 18 }} className="ob-stat-grid">
           {stats.map((stat) => {
             const statHoverStyles = {
               total: { boxShadow: '0 18px 34px rgba(37,99,235,0.14)', borderColor: 'rgba(37,99,235,0.22)' },
@@ -565,14 +643,10 @@ export default function OutboundsPage() {
                 onMouseLeave={() => setHoveredStat(null)}
                 style={{
                   background: 'linear-gradient(180deg, rgba(255,255,255,0.98), rgba(241,245,249,0.94))',
-                  borderWidth: '1px',
-                  borderStyle: 'solid',
-                  borderColor: isHovered ? (statHoverStyles[stat.id]?.borderColor || '#e8eef5') : '#e8eef5',
-                  borderTopWidth: '4px',
-                  borderTopStyle: 'solid',
-                  borderTopColor: 'transparent',
-                  borderRadius: '18px',
-                  padding: '18px 20px',
+                  border: '1px solid ' + (isHovered ? (statHoverStyles[stat.id]?.borderColor || '#e8eef5') : '#e8eef5'),
+                  borderTop: '4px solid ' + (isHovered ? (statHoverStyles[stat.id]?.borderColor || '#e8eef5') : '#e8eef5'),
+                  borderRadius: isMobile ? 14 : 18,
+                  padding: isMobile ? '14px 14px' : '18px 20px',
                   boxShadow: isHovered ? (statHoverStyles[stat.id]?.boxShadow || '0 18px 34px rgba(15,23,42,0.10)') : '0 10px 24px rgba(15, 23, 42, 0.04)',
                   transition: 'transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, filter 0.2s ease',
                   transform: isHovered ? 'translateY(-4px)' : 'translateY(0)',
@@ -596,7 +670,7 @@ export default function OutboundsPage() {
           </div>
 
           <div style={{ padding: '16px 20px', borderBottom: '1px solid #eef2f7', background: '#fff' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) repeat(2, minmax(180px, 1fr)) auto', gap: '12px', alignItems: 'center' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : isTablet ? '1fr 1fr' : 'minmax(0, 2fr) repeat(2, minmax(180px, 1fr)) auto', gap: '12px', alignItems: 'center' }} className="ob-filter-row">
               <div style={{ position: 'relative' }}>
                 <i className="ri-search-line" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }} />
                 <input
@@ -773,30 +847,51 @@ export default function OutboundsPage() {
                           <td style={{ ...cellStyle, textAlign: 'center' }}>
                             {/* 👉 ĐÃ SỬA: Chỉ hiện nút Xuất khi trạng thái đích danh là Kho đang xử lý */}
                             {(o.order_status || o.status) === 'warehouse_processing' ? (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setSelectedOrder(o);
-                                  setTargetWarehouse('');
-                                  setIsConfirmOpen(true);
-                                }}
-                                style={actionButtonStyle}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.transform = 'translateY(-1px)';
-                                  e.currentTarget.style.boxShadow = '0 12px 22px rgba(37, 99, 235, 0.22)';
-                                  e.currentTarget.style.filter = 'brightness(1.02)';
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.transform = 'translateY(0)';
-                                  e.currentTarget.style.boxShadow = '0 8px 18px rgba(37, 99, 235, 0.18)';
-                                  e.currentTarget.style.filter = 'brightness(1)';
-                                }}
-                              >
-                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-                                  <i className="ri-truck-line" />
-                                  <span>Chọn kho & xuất</span>
-                                </span>
-                              </button>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'stretch' }}>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedOrder(o);
+                                    setTargetWarehouse('');
+                                    setWarehouseStock([]);
+                                    setIsConfirmOpen(true);
+                                  }}
+                                  style={actionButtonStyle}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.transform = 'translateY(-1px)';
+                                    e.currentTarget.style.boxShadow = '0 12px 22px rgba(37, 99, 235, 0.22)';
+                                    e.currentTarget.style.filter = 'brightness(1.02)';
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.transform = 'translateY(0)';
+                                    e.currentTarget.style.boxShadow = '0 8px 18px rgba(37, 99, 235, 0.18)';
+                                    e.currentTarget.style.filter = 'brightness(1)';
+                                  }}
+                                >
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                                    <i className="ri-truck-line" />
+                                    <span>Xuất kho</span>
+                                  </span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => { setSelectedOrder(o); setIsRejectOpen(true); }}
+                                  style={{ ...actionButtonStyle, background: '#ef4444', boxShadow: '0 8px 18px rgba(239,68,68,0.2)' }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.transform = 'translateY(-1px)';
+                                    e.currentTarget.style.boxShadow = '0 12px 22px rgba(239,68,68,0.22)';
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.transform = 'translateY(0)';
+                                    e.currentTarget.style.boxShadow = '0 8px 18px rgba(239,68,68,0.2)';
+                                  }}
+                                >
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                                    <i className="ri-close-line" />
+                                    <span>Từ chối</span>
+                                  </span>
+                                </button>
+                              </div>
                             ) : (
                               <button
                                 type="button"
@@ -830,23 +925,122 @@ export default function OutboundsPage() {
         </div>
       </div>
 
-      {isConfirmOpen && (
-        <div className="modal-animate" style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.55)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
-          <div className="modal-panel-animate" style={{ background: 'white', padding: '30px', borderRadius: '15px', width: '420px', transformOrigin: 'center' }}>
-            <h3 style={{ marginTop: 0, color: '#38a169' }}>Xác nhận xuất kho</h3>
-            <p>Đơn hàng: <b>{selectedOrder?.order_no}</b></p>
-            <p>Khách hàng: <b>{selectedOrder?.customer_name}</b></p>
+      {/* Modal xuất kho */}
+      {isConfirmOpen && selectedOrder && (
+        <div className="modal-animate" style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.55)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999 }}>
+          <div className="modal-panel-animate" style={{ background: 'white', padding: '28px', borderRadius: '18px', width: 'min(640px, 95vw)', maxHeight: '90vh', overflowY: 'auto', transformOrigin: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <div>
+                <h3 style={{ margin: 0, color: '#0f172a', fontSize: '20px' }}>Xuất kho cho đơn #{selectedOrder.order_no}</h3>
+                <p style={{ margin: '6px 0 0', color: '#64748b', fontSize: '13px' }}>{selectedOrder.customer_name}</p>
+              </div>
+              <button type="button" onClick={() => { setIsConfirmOpen(false); setTargetWarehouse(''); setWarehouseStock([]); }}
+                style={{ ...iconButtonStyle, width: '40px', height: '40px' }}>
+                <i className="ri-close-line" style={{ fontSize: '18px' }} />
+              </button>
+            </div>
+
+            {/* Thông tin sản phẩm */}
+            <div style={{ marginBottom: '18px', padding: '14px 16px', borderRadius: '14px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+              <div style={{ fontSize: '12px', fontWeight: 800, color: '#64748b', marginBottom: '10px', textTransform: 'uppercase' }}>Sản phẩm trong đơn</div>
+              {(selectedOrder.items || []).map((item) => (
+                <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #e2e8f0' }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '14px' }}>{item.product_name}</div>
+                    <div style={{ fontSize: '12px', color: '#94a3b8' }}>{item.product_sku}</div>
+                  </div>
+                  <div style={{ fontWeight: 800, color: '#2563eb' }}>x{item.quantity}</div>
+                </div>
+              ))}
+            </div>
+
             <form onSubmit={handleExport}>
-              <label style={{ display: 'block', marginBottom: '10px', fontWeight: 'bold' }}>Chọn kho xuất:</label>
-              <select required value={targetWarehouse} onChange={(e) => setTargetWarehouse(e.target.value)} style={{ width: '100%', padding: '10px', marginBottom: '20px', borderRadius: '5px' }}>
-                <option value="">-- Chọn kho --</option>
-                {warehouses.map((w) => (
-                  <option key={w.id} value={w.id}>{w.name}</option>
-                ))}
-              </select>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 800, color: '#0f172a' }}>Chọn kho xuất <span style={{ color: '#ef4444' }}>*</span></label>
+                <select required value={targetWarehouse} onChange={(e) => setTargetWarehouse(e.target.value)}
+                  style={{ width: '100%', padding: '12px 14px', borderRadius: '12px', border: '1px solid #cbd5e1', outline: 'none', fontSize: '14px' }}>
+                  <option value="">-- Chọn kho --</option>
+                  {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+                </select>
+              </div>
+
+              {/* Hiện tồn kho khi đã chọn kho */}
+              {targetWarehouse && (
+                <div style={{ marginBottom: '16px', padding: '14px 16px', borderRadius: '14px', background: '#eff6ff', border: '1px solid #bfdbfe' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 800, color: '#1d4ed8', marginBottom: '10px', textTransform: 'uppercase' }}>Tồn kho tại kho đã chọn</div>
+                  {warehouseStock.length === 0 ? (
+                    <div style={{ color: '#64748b', fontSize: '13px' }}>Đang tải...</div>
+                  ) : (
+                    (selectedOrder.items || []).map((item) => {
+                      const stock = warehouseStock.find((s) => s.product_id === item.product_id);
+                      const onHand = stock?.on_hand_qty || 0;
+                      const enough = onHand >= item.quantity;
+                      return (
+                        <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0' }}>
+                          <div style={{ fontSize: '13px' }}>{item.product_name}</div>
+                          <span style={{ fontWeight: 800, color: enough ? '#166534' : '#dc2626', fontSize: '13px' }}>
+                            {onHand} / cần {item.quantity}
+                            {!enough && <span style={{ marginLeft: '6px' }}>⚠</span>}
+                          </span>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+
               <div style={{ display: 'flex', gap: '10px' }}>
-                <button type="submit" style={{ flex: 1, padding: '12px', background: '#38a169', color: 'white', border: 'none', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer' }}>Xuất kho</button>
-                <button type="button" onClick={() => setIsConfirmOpen(false)} style={{ flex: 1, padding: '12px', background: '#edf2f7', borderRadius: '5px', border: 'none', cursor: 'pointer' }}>Hủy</button>
+                <button type="submit" style={{ flex: 1, padding: '14px', background: '#10b981', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 800, cursor: 'pointer', fontSize: '15px', boxShadow: '0 8px 18px rgba(16,185,129,0.2)' }}>
+                  <i className="ri-truck-line" style={{ marginRight: '8px' }} />Xuất kho
+                </button>
+                <button type="button" onClick={() => { setIsConfirmOpen(false); setTargetWarehouse(''); setWarehouseStock([]); }}
+                  style={{ flex: 1, padding: '14px', background: '#f1f5f9', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 800, color: '#475569', fontSize: '14px' }}>
+                  Hủy
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal từ chối */}
+      {isRejectOpen && selectedOrder && (
+        <div className="modal-animate" style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.55)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999 }}>
+          <div className="modal-panel-animate" style={{ background: 'white', padding: '28px', borderRadius: '18px', width: 'min(520px, 95vw)', transformOrigin: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <div>
+                <h3 style={{ margin: 0, color: '#b91c1c', fontSize: '20px' }}>Kho từ chối xuất hàng</h3>
+                <p style={{ margin: '6px 0 0', color: '#64748b', fontSize: '13px' }}>Đơn #{selectedOrder.order_no} — {selectedOrder.customer_name}</p>
+              </div>
+              <button type="button" onClick={() => { setIsRejectOpen(false); setRejectReason(''); }}
+                style={{ ...iconButtonStyle, width: '40px', height: '40px' }}>
+                <i className="ri-close-line" style={{ fontSize: '18px' }} />
+              </button>
+            </div>
+            <form onSubmit={handleReject}>
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 800 }}>Lý do từ chối <span style={{ color: '#ef4444' }}>*</span></label>
+                <textarea required rows="3" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)}
+                  placeholder="VD: Hết hàng trong kho, sai địa chỉ giao hàng..."
+                  style={{ width: '100%', padding: '12px 14px', borderRadius: '12px', border: '1px solid #cbd5e1', outline: 'none', fontSize: '14px', resize: 'vertical', fontFamily: 'inherit' }} />
+              </div>
+              <div style={{ marginBottom: '18px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 800 }}>Hướng xử lý cho Sales</label>
+                <select value={warehouseAction} onChange={(e) => setWarehouseAction(e.target.value)}
+                  style={{ width: '100%', padding: '12px 14px', borderRadius: '12px', border: '1px solid #cbd5e1', outline: 'none', fontSize: '14px' }}>
+                  <option value="xoa_don">Xóa đơn hàng</option>
+                  <option value="doi_ngay">Dời ngày giao</option>
+                  <option value="thay_doi_so_luong">Thay đổi số lượng</option>
+                </select>
+              </div>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button type="submit" style={{ flex: 1, padding: '14px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 800, cursor: 'pointer', fontSize: '15px', boxShadow: '0 8px 18px rgba(239,68,68,0.2)' }}>
+                  <i className="ri-close-line" style={{ marginRight: '8px' }} />Gửi từ chối
+                </button>
+                <button type="button" onClick={() => { setIsRejectOpen(false); setRejectReason(''); }}
+                  style={{ flex: 1, padding: '14px', background: '#f1f5f9', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 800, color: '#475569', fontSize: '14px' }}>
+                  Hủy
+                </button>
               </div>
             </form>
           </div>
@@ -863,7 +1057,7 @@ export default function OutboundsPage() {
               </button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '18px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px', marginBottom: '18px' }} className="ob-detail-grid">
               <div><b>Mã đơn:</b> {selectedOrder.order_no}</div>
               <div><b>Trạng thái:</b> {statusStyle(selectedOrder.order_status || selectedOrder.status).label}</div>
               <div><b>Khách hàng:</b> {selectedOrder.customer_name || '—'}</div>

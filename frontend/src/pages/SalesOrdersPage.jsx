@@ -1,440 +1,259 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
+import 'remixicon/fonts/remixicon.css';
 import api from '../services/api';
 import { formatOrderItems, normalizeOrderItems } from '../utils/orderItems';
 
+const user = JSON.parse(localStorage.getItem('user') || '{}');
+const isAuthorized = [1, 2].includes(user?.role_id);
+
 const statusConfig = {
-    pending: {
-        label: 'Đang chờ duyệt',
-        tone: 'warning',
-    },
-    returned: {
-        label: 'Bị từ chối',
-        tone: 'danger',
-    },
-    warehouse_processing: {
-        label: 'Kho đang xuất',
-        tone: 'info',
-    },
-    shipping: {
-        label: 'Đang giao',
-        tone: 'purple',
-    },
-    completed: {
-        label: 'Đã hoàn tất',
-        tone: 'success',
-    },
-    logistics_review: {
-        label: 'Kho báo lỗi',
-        tone: 'purple',
-    },
-    canceled: {
-        label: 'Hủy đơn',
-        tone: 'danger',
-    },
+    pending:              { label: 'Đang chờ duyệt',        tone: 'warning' },
+    returned:            { label: 'Bị từ chối',             tone: 'danger' },
+    warehouse_processing: { label: 'Kho đang xuất',          tone: 'info' },
+    waiting_sales:       { label: 'Đợi Sales xử lý',       tone: 'amber' },
+    return_to_sales:     { label: 'Hoàn về Sales',          tone: 'amber' },
+    shipping:            { label: 'Đang giao',               tone: 'purple' },
+    completed:           { label: 'Đã hoàn tất',            tone: 'success' },
+    logistics_review:     { label: 'Kho báo lỗi',            tone: 'purple' },
+    canceled:            { label: 'Hủy đơn',                tone: 'danger' },
+    customer_rejected:   { label: 'Khách từ chối',          tone: 'danger' },
+    return_pending:      { label: 'Đang xử lý hoàn',        tone: 'orange' },
+    return_completed:   { label: 'Hoàn xong',               tone: 'success' },
 };
 
 const toneStyles = {
-    warning: { background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d' },
-    danger: { background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5' },
-    info: { background: '#dbeafe', color: '#1d4ed8', border: '1px solid #93c5fd' },
-    success: { background: '#dcfce7', color: '#166534', border: '1px solid #86efac' },
-    purple: { background: '#ede9fe', color: '#6b21a8', border: '1px solid #c4b5fd' },
+    warning: { background: '#fef3c7', color: '#92400e' },
+    danger: { background: '#fee2e2', color: '#991b1b' },
+    info: { background: '#dbeafe', color: '#1d4ed8' },
+    success: { background: '#dcfce7', color: '#166534' },
+    purple: { background: '#ede9fe', color: '#6b21a8' },
+    amber:  { background: '#fef9c3', color: '#854d0e' },
+    orange: { background: '#ffedd5', color: '#9a3412' },
 };
 
-const statIcons = {
-    total: (
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ width: '22px', height: '22px' }}>
-            <path d="M4 7.5C4 6.12 5.12 5 6.5 5h11C18.88 5 20 6.12 20 7.5v9c0 1.38-1.12 2.5-2.5 2.5h-11C5.12 19 4 17.88 4 16.5v-9Z" stroke="currentColor" strokeWidth="1.8" />
-            <path d="M8 9h8M8 12h8M8 15h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-        </svg>
-    ),
-    pending: (
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ width: '22px', height: '22px' }}>
-            <path d="M12 7v5l3 3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.8" />
-        </svg>
-    ),
-    completed: (
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ width: '22px', height: '22px' }}>
-            <path d="M20 7 10 17l-5-5" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M12 3.5a8.5 8.5 0 1 0 8.5 8.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-        </svg>
-    ),
-    issues: (
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ width: '22px', height: '22px' }}>
-            <path d="M12 9v4" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
-            <path d="M12 17h.01" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-            <path d="m10.29 4.86-7.43 12.8A2 2 0 0 0 4.58 21h14.84a2 2 0 0 0 1.72-3.34l-7.43-12.8a2 2 0 0 0-3.44 0Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-        </svg>
-    ),
-};
+const fmt = new Intl.NumberFormat('vi-VN').format;
 
-const pageStyles = {
-    page: {
-        minHeight: '100vh',
-        padding: '28px',
-        background: 'radial-gradient(circle at top left, #eff6ff 0%, #f8fafc 35%, #f3f4f6 100%)',
-        color: '#0f172a',
-    },
-    shell: {
-        maxWidth: '1400px',
-        margin: '0 auto',
-    },
-    hero: {
-        display: 'grid',
-        gridTemplateColumns: '1.3fr 0.7fr',
-        gap: '20px',
-        alignItems: 'stretch',
-        marginBottom: '22px',
-    },
-    heroCard: {
-        background: 'linear-gradient(135deg, rgba(15,23,42,0.98), rgba(30,41,59,0.95))',
-        borderRadius: '24px',
-        padding: '28px',
-        color: 'white',
-        boxShadow: '0 24px 60px rgba(15,23,42,0.16)',
-    },
-    heroTitle: {
-        margin: 0,
-        fontSize: '30px',
-        lineHeight: 1.2,
-        letterSpacing: '-0.03em',
-    },
-    heroSubtitle: {
-        margin: '12px 0 0',
-        maxWidth: '760px',
-        color: 'rgba(255,255,255,0.78)',
-        lineHeight: 1.7,
-    },
-    heroStats: {
-        display: 'grid',
-        gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
-        gap: '14px',
-        width: '100%',
-    },
-    statCard: {
-        background: 'linear-gradient(180deg, rgba(255,255,255,0.98), rgba(241,245,249,0.94))',
-        borderRadius: '22px',
-        padding: '18px 18px 16px',
-        boxShadow: '0 12px 24px rgba(15,23,42,0.08)',
-        border: '1px solid rgba(148,163,184,0.18)',
-        position: 'relative',
-        overflow: 'hidden',
-        minHeight: '104px',
-        transition: 'transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease',
-    },
-    statBlue: { '--hover-shadow': '0 20px 44px rgba(37,99,235,0.20)', '--hover-border': '#93c5fd', borderTop: '4px solid #2563eb' },
-    statAmber: { '--hover-shadow': '0 20px 44px rgba(245,158,11,0.20)', '--hover-border': '#fbbf24', borderTop: '4px solid #f59e0b' },
-    statGreen: { '--hover-shadow': '0 20px 44px rgba(22,163,74,0.20)', '--hover-border': '#86efac', borderTop: '4px solid #16a34a' },
-    statRose: { '--hover-shadow': '0 20px 44px rgba(220,38,38,0.20)', '--hover-border': '#fca5a5', borderTop: '4px solid #dc2626' },
-    statBadge: {
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: '40px',
-        height: '40px',
-        borderRadius: '14px',
-        marginBottom: '12px',
-        fontSize: '20px',
-        boxShadow: '0 8px 18px rgba(15,23,42,0.08)',
-    },
-    statLabel: { margin: 0, color: '#64748b', fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' },
-    statValue: { margin: '10px 0 0', fontSize: '30px', fontWeight: 900, color: '#0f172a', letterSpacing: '-0.04em' },
-    section: {
-        background: 'rgba(255,255,255,0.9)',
-        backdropFilter: 'blur(10px)',
-        border: '1px solid rgba(148,163,184,0.18)',
-        borderRadius: '24px',
-        boxShadow: '0 20px 50px rgba(15,23,42,0.08)',
-        overflow: 'hidden',
-        marginBottom: '22px',
-    },
-    sectionHeader: {
-        padding: '22px 24px 0',
-    },
-    sectionTitle: { margin: 0, fontSize: '20px', color: '#0f172a' },
-    sectionDesc: { margin: '8px 0 0', color: '#64748b', lineHeight: 1.6 },
-    formGrid: {
-        display: 'grid',
-        gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-        gap: '14px',
-    },
-    input: {
-        width: '100%',
-        padding: '13px 14px',
-        borderRadius: '14px',
-        border: '1px solid #cbd5e1',
-        background: '#fff',
-        outline: 'none',
-        boxSizing: 'border-box',
-    },
-    textarea: {
-        width: '100%',
-        padding: '13px 14px',
-        borderRadius: '14px',
-        border: '1px solid #cbd5e1',
-        background: '#fff',
-        outline: 'none',
-        boxSizing: 'border-box',
-        minHeight: '110px',
-        resize: 'vertical',
-        fontFamily: 'inherit',
-    },
-    table: {
-        width: '100%',
-        borderCollapse: 'separate',
-        borderSpacing: 0,
-    },
-};
-
-const formatCurrency = new Intl.NumberFormat('vi-VN').format;
-
-const calculateOrderTotal = (order) => {
+const calcTotal = (order) => {
     const items = Array.isArray(order?.items) ? order.items : normalizeOrderItems(order);
-
     return items.reduce((sum, item) => {
-        const unitPrice = Number(
-            item.unit_price ??
-            item.sale_price ??
-            item.price ??
-            item.product?.sale_price ??
-            item.product?.price ??
-            item.product?.unit_price ??
-            item.product_price ??
-            item.product?.product_price ??
-            0
+        const price = Number(
+            item.unit_price ?? item.sale_price ?? item.price ??
+            item.product?.sale_price ?? item.product?.price ?? item.product?.unit_price ??
+            item.product_price ?? item.product?.product_price ?? 0
         );
-        const quantity = Number(item.quantity ?? item.qty ?? item.product_quantity ?? 0);
-        return sum + unitPrice * quantity;
+        return sum + price * Number(item.quantity ?? item.qty ?? item.product_quantity ?? 0);
     }, 0);
 };
 
-const enrichOrderItemsWithProducts = (items, products) => {
-    return items.map((item) => {
-        const matchedProduct = products.find((product) =>
-            Number(product.id) === Number(item.product_id) ||
-            String(product.sku || '') === String(item.product_sku || item.sku || '')
+const enrichItems = (items, products) =>
+    items.map((item) => {
+        const match = products.find(
+            (p) => Number(p.id) === Number(item.product_id) ||
+                   String(p.sku || '') === String(item.product_sku || item.sku || '')
         );
-
         return {
             ...item,
-            product_name:
-                item.product_name ??
-                item.name ??
-                item.product?.name ??
-                matchedProduct?.name ??
-                matchedProduct?.product_name ??
-                matchedProduct?.title ??
-                'Sản phẩm không tên',
-            product_sku:
-                item.product_sku ??
-                item.sku ??
-                item.product?.sku ??
-                matchedProduct?.sku ??
-                matchedProduct?.product_sku ??
-                '',
+            product_name: item.product_name ?? item.name ?? item.product?.name ?? match?.name ?? match?.product_name ?? 'Sản phẩm không tên',
+            product_sku: item.product_sku ?? item.sku ?? item.product?.sku ?? match?.sku ?? '',
             unit_price: Number(
-                item.unit_price ??
-                item.sale_price ??
-                item.price ??
-                item.product?.sale_price ??
-                item.product?.price ??
-                item.product?.unit_price ??
-                matchedProduct?.sale_price ??
-                matchedProduct?.price ??
-                0
+                item.unit_price ?? item.sale_price ?? item.price ??
+                item.product?.sale_price ?? item.product?.price ?? item.product?.unit_price ??
+                match?.sale_price ?? match?.price ?? 0
             ),
         };
     });
-};
 
 export default function SalesOrdersPage() {
-    const [hoveredStat, setHoveredStat] = useState(null);
     const [customers, setCustomers] = useState([]);
     const [products, setProducts] = useState([]);
     const [orders, setOrders] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
-
     const [editingId, setEditingId] = useState(null);
     const [orderNo, setOrderNo] = useState('');
     const [customerId, setCustomerId] = useState('');
     const [expectedDate, setExpectedDate] = useState('');
     const [selectedItems, setSelectedItems] = useState([]);
     const [note, setNote] = useState('');
-    const [isCreateOrderOpen, setIsCreateOrderOpen] = useState(false);
-    const [hoveredOrderId, setHoveredOrderId] = useState(null);
-
-    const [isReasonModalOpen, setIsReasonModalOpen] = useState(false);
-    const [errorOrder, setErrorOrder] = useState(null);
-    const [isOrderViewOpen, setIsOrderViewOpen] = useState(false);
+    const [warehouseNote, setWarehouseNote] = useState('');
+    const [isFormOpen, setIsFormOpen] = useState(false);
+    const [isFormVisible, setIsFormVisible] = useState(false);
+    const [isViewOpen, setIsViewOpen] = useState(false);
     const [viewOrder, setViewOrder] = useState(null);
-    const [cancelReasonOrder, setCancelReasonOrder] = useState(null);
+    const [errorOrder, setErrorOrder] = useState(null);
+    const [isErrorModalOpen, setIsErrorModalOpen] = useState(false);
+    const [rejectOrder, setRejectOrder] = useState(null);
+    const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
+    const [rejectAction, setRejectAction] = useState('return_to_warehouse'); // 'return_to_warehouse' | 'return_pending'
+    const [rejectNote, setRejectNote] = useState('');
+    const [cancelOrder, setCancelOrder] = useState(null);
+    const [pageLoaded, setPageLoaded] = useState(false);
+    const [hoveredRowId, setHoveredRowId] = useState(null);
 
-    const fetchData = async () => {
+    // ── Responsive ────────────────────────────────────────────────────────────
+    const [isMobile, setIsMobile] = useState(
+        typeof window !== 'undefined' ? window.innerWidth < 768 : false
+    );
+    const [isTablet, setIsTablet] = useState(
+        typeof window !== 'undefined' ? window.innerWidth >= 768 && window.innerWidth < 1024 : false
+    );
+
+    useEffect(() => {
+        const onResize = () => {
+            const w = window.innerWidth;
+            setIsMobile(w < 768);
+            setIsTablet(w >= 768 && w < 1024);
+        };
+        onResize();
+        window.addEventListener('resize', onResize);
+        return () => window.removeEventListener('resize', onResize);
+    }, []);
+
+    // ── Data ──────────────────────────────────────────────────────────────────
+    const fetchAll = async () => {
         try {
-            const [custRes, prodRes, ordRes] = await Promise.all([
+            const [c, p, o] = await Promise.all([
                 api.get('/customers'),
                 api.get('/products'),
                 api.get('/orders'),
             ]);
-            setCustomers(custRes.data);
-            setProducts(prodRes.data);
-            setOrders(ordRes.data);
+            setCustomers(c.data);
+            setProducts(p.data);
+            setOrders(o.data);
         } catch {
             alert('Lỗi tải dữ liệu hệ thống');
         }
     };
 
     useEffect(() => {
-        let isActive = true;
+        fetchAll();
+        setPageLoaded(false);
+        requestAnimationFrame(() => requestAnimationFrame(() => setPageLoaded(true)));
 
-        const loadData = async () => {
-            if (!isActive) return;
-            await fetchData();
+        const onKey = (e) => {
+            if (e.key === 'Escape') {
+                closeForm();
+                setIsViewOpen(false);
+                setViewOrder(null);
+                setIsErrorModalOpen(false);
+                setErrorOrder(null);
+                setCancelOrder(null);
+            }
         };
-
-        loadData();
-
-        return () => {
-            isActive = false;
-        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
     }, []);
 
+    // ── Computed ──────────────────────────────────────────────────────────────
     const filteredOrders = useMemo(() => {
-        const keyword = searchTerm.trim().toLowerCase();
-
-        return orders.filter((order) => {
-            const currentStatus = statusConfig[order.status] ? order.status : 'pending';
-            const searchableText = [
-                order.order_no,
-                order.customer_name,
-                order.expected_delivery_date,
-                order.note,
-                order.delivery_address,
-                order.shipping_address,
-                order.customer_address,
-                ...(order.items || []).flatMap((item) => [item.product_name, item.product_sku]),
-            ]
-                .filter(Boolean)
-                .join(' ')
-                .toLowerCase();
-
-            const matchesSearch = !keyword || searchableText.includes(keyword);
-            const matchesStatus = statusFilter === 'all' || currentStatus === statusFilter;
-
-            return matchesSearch && matchesStatus;
+        const kw = searchTerm.trim().toLowerCase();
+        return orders.filter((o) => {
+            const status = statusConfig[o.status] ? o.status : 'pending';
+            const text = [
+                o.order_no, o.customer_name, o.expected_delivery_date, o.note,
+                ...(o.items || []).flatMap((i) => [i.product_name, i.product_sku]),
+            ].filter(Boolean).join(' ').toLowerCase();
+            return (!kw || text.includes(kw)) && (statusFilter === 'all' || status === statusFilter);
         });
     }, [orders, searchTerm, statusFilter]);
 
-    const stats = useMemo(() => {
-        const total = orders.length;
-        const pending = orders.filter((o) => (statusConfig[o.status] ? o.status : 'pending') === 'pending').length;
-        const completed = orders.filter((o) => o.status === 'completed').length;
-        const issues = orders.filter((o) => ['returned', 'logistics_review'].includes(o.status)).length;
-        return { total, pending, completed, issues };
-    }, [orders]);
+    const stats = useMemo(() => ({
+        total: orders.length,
+        pending: orders.filter((o) => (statusConfig[o.status] ? o.status : 'pending') === 'pending').length,
+        completed: orders.filter((o) => o.status === 'completed').length,
+        issues: orders.filter((o) => ['returned', 'logistics_review', 'waiting_sales'].includes(o.status)).length,
+    }), [orders]);
 
-    const addItem = () => setSelectedItems([...selectedItems, { product_id: '', quantity: 1, unit_price: 0 }]);
-
-    const updateItem = (index, field, value) => {
-        const newItems = [...selectedItems];
-        if (field === 'quantity') {
-            newItems[index][field] = Math.max(1, Number(value) || 1);
-        } else {
-            newItems[index][field] = value;
-        }
-        if (field === 'product_id') {
-            const prod = products.find((p) => p.id === parseInt(value, 10));
+    // ── Item helpers ─────────────────────────────────────────────────────────
+    const addItem = (productId) => {
+        if (productId) {
+            const prod = products.find((p) => String(p.id) === String(productId));
             if (prod) {
-                newItems[index].unit_price = Number(prod.sale_price || 0);
+                setSelectedItems((prev) => [
+                    ...prev,
+                    { product_id: String(prod.id), quantity: 1, unit_price: Number(prod.sale_price || 0) }
+                ]);
+                return;
             }
         }
-        setSelectedItems(newItems);
+        setSelectedItems((p) => [...p, { product_id: '', quantity: 1, unit_price: 0 }]);
     };
 
-    const removeItem = (index) => setSelectedItems(selectedItems.filter((_, i) => i !== index));
+    const updateItem = (idx, field, val) => {
+        setSelectedItems((prev) => {
+            const next = [...prev];
+            if (field === 'quantity') next[idx].quantity = Math.max(1, Number(val) || 1);
+            else if (field === 'product_id') {
+                next[idx].product_id = val;
+                const prod = products.find((p) => p.id === parseInt(val, 10));
+                if (prod) next[idx].unit_price = Number(prod.sale_price || 0);
+            } else {
+                next[idx][field] = val;
+            }
+            return next;
+        });
+    };
 
-    const handleViewClick = async (order) => {
-        try {
-            const res = await api.get(`/orders/${order.id}/items`);
-            const enrichedItems = enrichOrderItemsWithProducts(Array.isArray(res.data) ? res.data : [], products);
-            setViewOrder({
-                ...order,
-                items: enrichedItems,
-            });
-            setIsOrderViewOpen(true);
-        } catch (error) {
-            setViewOrder(order);
-            setIsOrderViewOpen(true);
+    const removeItem = (idx) => setSelectedItems((p) => p.filter((_, i) => i !== idx));
+
+    // ── Open/close form ───────────────────────────────────────────────────────
+    const openForm = () => {
+        setIsFormOpen(true);
+        requestAnimationFrame(() => setIsFormVisible(true));
+    };
+
+    const openAdd = () => {
+        setEditingId(null);
+        setOrderNo('');
+        setCustomerId('');
+        setExpectedDate('');
+        setNote('');
+        setWarehouseNote('');
+        setSelectedItems([]);
+        openForm();
+    };
+
+    const closeForm = () => {
+        setIsFormVisible(false);
+        window.setTimeout(() => {
+            setIsFormOpen(false);
+            setEditingId(null);
+            setCustomerId('');
+            setExpectedDate('');
+            setNote('');
+            setWarehouseNote('');
+            setSelectedItems([]);
+        }, 220);
+    };
+
+    const openEdit = async (order) => {
+        if (['warehouse_processing', 'shipping', 'completed', 'canceled', 'customer_rejected', 'return_pending', 'return_completed'].includes(order?.status)) {
+            return alert('Đơn hàng đang ở giai đoạn này nên không thể chỉnh sửa.');
         }
-    };
-
-    const closeViewModal = () => {
-        setIsOrderViewOpen(false);
-        setViewOrder(null);
-    };
-
-    const handleEditClick = async (order) => {
-        const currentStatus = order?.status || 'pending';
-        if (['warehouse_processing', 'shipping', 'completed', 'canceled'].includes(currentStatus)) {
-            alert('Đơn hàng đang trong trạng thái này nên không thể chỉnh sửa.');
-            return;
-        }
-
         try {
             const res = await api.get(`/orders/${order.id}/items`);
             setOrderNo(order.order_no);
             setCustomerId(order.customer_id);
-            setExpectedDate(order.expected_delivery_date ? new Date(order.expected_delivery_date).toISOString().split('T')[0] : '');
+            setExpectedDate(order.expected_delivery_date ? order.expected_delivery_date.split('T')[0] : '');
             setNote(order.note || '');
+            setWarehouseNote(order.warehouse_note || '');
             setSelectedItems(res.data);
             setEditingId(order.id);
-            setIsCreateOrderOpen(true);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-            setIsReasonModalOpen(false);
+            openForm();
         } catch {
             alert('Lỗi tải chi tiết đơn');
         }
     };
 
-    const cancelEdit = () => {
-        setEditingId(null);
-        setCustomerId('');
-        setExpectedDate('');
-        setNote('');
-        setSelectedItems([]);
-        setIsCreateOrderOpen(false);
-        setIsReasonModalOpen(false);
-    };
-
-    useEffect(() => {
-        if (isCreateOrderOpen) {
-            // Form auto-opens, no focus needed
-        }
-        return undefined;
-    }, [isCreateOrderOpen]);
-
-    useEffect(() => {
-        const onKeyDown = (event) => {
-            if (event.key === 'Escape') {
-                if (isCreateOrderOpen || isReasonModalOpen || isOrderViewOpen || cancelReasonOrder) {
-                    cancelEdit();
-                    closeViewModal();
-                    closeCancelReason();
-                }
-            }
-        };
-
-        window.addEventListener('keydown', onKeyDown);
-        return () => window.removeEventListener('keydown', onKeyDown);
-    }, [isCreateOrderOpen, isReasonModalOpen, isOrderViewOpen]);
-
+    // ── Submit ───────────────────────────────────────────────────────────────
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (selectedItems.length === 0) return alert('Vui lòng chọn ít nhất 1 sản phẩm');
+
         try {
-            const orderData = {
+            // Backend tự sinh mã trong transaction — không gọi next-code ở đây
+            const payload = {
                 customer_id: customerId,
                 order_date: new Date().toISOString(),
                 expected_delivery_date: expectedDate,
@@ -443,695 +262,985 @@ export default function SalesOrdersPage() {
             };
 
             if (editingId) {
-                await api.put(`/orders/${editingId}`, orderData);
+                await api.put(`/orders/${editingId}`, payload);
                 alert('Cập nhật thành công!');
             } else {
-                const res = await api.post('/orders', { customer_id: customerId, order_date: orderDate, expected_delivery_date: expectedDate, note, items: selectedItems });
+                const res = await api.post('/orders', payload);
                 alert(`Tạo đơn hàng thành công! Mã đơn: ${res.data.order_no}`);
             }
-            cancelEdit();
-            fetchData();
-        } catch (error) {
-            alert(error.response?.data?.message || 'Lỗi không xác định khi xử lý đơn');
+            closeForm();
+            fetchAll();
+        } catch (err) {
+            alert(err.response?.data?.message || 'Lỗi khi xử lý đơn');
         }
     };
 
+    // ── Delete / Cancel ──────────────────────────────────────────────────────
     const handleDelete = async (order) => {
-        const currentStatus = order?.status || 'pending';
-        if (['warehouse_processing', 'shipping', 'completed', 'canceled'].includes(currentStatus)) {
-            alert('Đơn hàng đang ở trạng thái này nên không thể xóa.');
-            return;
+        if (['warehouse_processing', 'shipping', 'completed', 'canceled', 'customer_rejected', 'return_pending', 'return_completed'].includes(order?.status)) {
+            return alert('Đơn hàng đang ở giai đoạn này nên không thể xóa.');
         }
-
-        if (window.confirm('Xác nhận xóa vĩnh viễn đơn hàng này?')) {
-            try {
-                await api.delete(`/orders/${order.id}`);
-                setIsReasonModalOpen(false);
-                fetchData();
-            } catch (error) {
-                alert(error.response?.data?.message || 'Lỗi xóa đơn');
-            }
+        if (!window.confirm('Xác nhận xóa vĩnh viễn đơn hàng này?')) return;
+        try {
+            await api.delete(`/orders/${order.id}`);
+            setIsErrorModalOpen(false);
+            setErrorOrder(null);
+            fetchAll();
+        } catch (err) {
+            alert(err.response?.data?.message || 'Lỗi xóa đơn');
         }
     };
-    const handleCancelOrder = async (order) => {
-        const isBomHang = order.note?.includes('[KHÁCH BOM HÀNG');
-        const confirmMsg = isBomHang 
-            ? 'Xác nhận: Khách bom hàng. Hệ thống sẽ tự động CỘNG TRẢ số lượng vào kho và HỦY đơn này?' 
+
+    const handleCancel = async (order) => {
+        const isBom = order.note?.includes('[KHÁCH BOM HÀNG');
+        const msg = isBom
+            ? 'Xác nhận: Khách bom hàng. Hệ thống sẽ tự động CỘNG TRẢ số lượng vào kho và HỦY đơn này?'
             : 'Xác nhận: Bạn muốn HỦY đơn hàng này? (Đơn chưa xuất kho nên sẽ không ảnh hưởng kho)';
-
-        if (window.confirm(confirmMsg)) {
-            try {
-                // API này backend đã tự biết lúc nào cần hoàn kho, lúc nào không
-                await api.put(`/orders/${order.id}/return-inventory`);
-                alert(isBomHang ? 'Đã hoàn kho và hủy đơn thành công!' : 'Đã hủy đơn thành công!');
-                setIsReasonModalOpen(false);
-                setErrorOrder((current) => (current?.id === order.id ? null : current));
-                fetchData();
-            } catch (error) {
-                alert(error.response?.data?.message || 'Lỗi khi xử lý hủy đơn');
-            }
+        if (!window.confirm(msg)) return;
+        try {
+            await api.put(`/orders/${order.id}/return-inventory`);
+            alert(isBom ? 'Đã hoàn kho và hủy đơn thành công!' : 'Đã hủy đơn thành công!');
+            setIsErrorModalOpen(false);
+            setErrorOrder(null);
+            fetchAll();
+        } catch (err) {
+            alert(err.response?.data?.message || 'Lỗi khi xử lý hủy đơn');
         }
     };
 
-    const openCancelReason = async (order) => {
+    // Hoàn đơn lại vào kho (đơn khách không nhận đã quay về Sales)
+    const handleReturnToWarehouse = async (order) => {
+        if (!window.confirm(`Xác nhận hoàn đơn "${order.order_no}" lại vào kho đã xuất? Hệ thống sẽ cộng trả số lượng vào kho và hủy đơn.`)) return;
+        try {
+            await api.put(`/orders/${order.id}/return-inventory`);
+            alert('Đã hoàn đơn lại vào kho thành công!');
+            fetchAll();
+        } catch (err) {
+            alert(err.response?.data?.message || 'Lỗi khi hoàn đơn vào kho');
+        }
+    };
+
+    // ── View ─────────────────────────────────────────────────────────────────
+    const openView = async (order) => {
         try {
             const res = await api.get(`/orders/${order.id}/items`);
-            setCancelReasonOrder({
-                ...order,
-                items: enrichOrderItemsWithProducts(Array.isArray(res.data) ? res.data : [], products),
-            });
+            setViewOrder({ ...order, items: enrichItems(Array.isArray(res.data) ? res.data : [], products) });
         } catch {
-            setCancelReasonOrder(order);
+            setViewOrder(order);
+        }
+        setIsViewOpen(true);
+    };
+
+    const openErrorModal = async (order) => {
+        try {
+            const res = await api.get(`/orders/${order.id}/items`);
+            setErrorOrder({ ...order, items: enrichItems(Array.isArray(res.data) ? res.data : [], products) });
+        } catch {
+            setErrorOrder(order);
+        }
+        setIsErrorModalOpen(true);
+    };
+
+    const openCancelModal = async (order) => {
+        try {
+            const res = await api.get(`/orders/${order.id}/items`);
+            setCancelOrder({ ...order, items: enrichItems(Array.isArray(res.data) ? res.data : [], products) });
+        } catch {
+            setCancelOrder(order);
         }
     };
 
-    const closeCancelReason = () => {
-        setCancelReasonOrder(null);
+    // Mở modal xử lý khách từ chối
+    const openRejectModal = async (order) => {
+        try {
+            const res = await api.get(`/orders/${order.id}/items`);
+            setRejectOrder({ ...order, items: enrichItems(Array.isArray(res.data) ? res.data : [], products) });
+        } catch {
+            setRejectOrder(order);
+        }
+        setRejectAction('return_to_warehouse');
+        setRejectNote('');
+        setIsRejectModalOpen(true);
     };
 
+    const handleReject = async () => {
+        if (!rejectOrder) return;
+        try {
+            await api.put(`/orders/${rejectOrder.id}/process-customer-rejection`, {
+                action: rejectAction,
+                note: rejectNote,
+            });
+            alert(rejectAction === 'return_to_warehouse'
+                ? 'Đã hoàn đơn lại vào kho thành công!'
+                : 'Đã chuyển sang xử lý hoàn thành công!');
+            setIsRejectModalOpen(false);
+            setRejectOrder(null);
+            fetchAll();
+        } catch (err) {
+            alert(err.response?.data?.message || 'Lỗi xử lý yêu cầu');
+        }
+    };
+
+    // ── Layout helpers ──────────────────────────────────────────────────────
+    const pad = isMobile ? 14 : isTablet ? 18 : 20;
+    const statCols = isMobile ? 1 : isTablet ? 2 : 4;
+    const cardR = isMobile ? 16 : 20;
+
+    // ── Render ────────────────────────────────────────────────────────────────
+    if (!isAuthorized) {
+        return (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', color: '#94a3b8', gap: 12 }}>
+                <i className="ri-lock-2-line" style={{ fontSize: 48, color: '#cbd5e1' }} />
+                <h2 style={{ margin: 0, color: '#334155' }}>Bạn không có quyền truy cập trang này</h2>
+                <p style={{ margin: 0, fontSize: 14 }}>Trang Quản lý đơn hàng chỉ dành cho Admin và Sales.</p>
+            </div>
+        );
+    }
+
     return (
-        <div style={pageStyles.page}>
-            <style>{`
-                @keyframes modalFadeIn {
-                    from {
-                        opacity: 0;
-                    }
-                    to {
-                        opacity: 1;
-                    }
-                }
-
-                @keyframes modalScaleIn {
-                    from {
-                        opacity: 0;
-                        transform: scale(0.96) translateY(10px);
-                    }
-                    to {
-                        opacity: 1;
-                        transform: scale(1) translateY(0);
-                    }
-                }
-
-                .modal-overlay-fade {
-                    animation: modalFadeIn 180ms ease-out;
-                }
-
-                .modal-panel-fade {
-                    animation: modalScaleIn 220ms ease-out;
-                }
-            `}</style>
-            <div style={pageStyles.shell}>
-                <div style={{ marginBottom: '22px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <h2 style={{ margin: 0, fontSize: 28, color: '#0f172a', letterSpacing: '-0.03em' }}>Quản lý đơn hàng</h2>
-                        <p style={{ margin: 0, color: '#64748b' }}>Theo dõi, chỉnh sửa và xử lý đơn hàng trong một giao diện gọn gàng.</p>
+        <div style={{
+            minHeight: '100dvh', padding: `${pad}px`,
+            background: 'radial-gradient(circle at top left, #eff6ff 0%, #f8fafc 35%, #f3f4f6 100%)',
+            color: '#0f172a', boxSizing: 'border-box',
+            opacity: pageLoaded ? 1 : 0,
+            transition: 'opacity 320ms ease',
+        }}>
+            <div style={{ maxWidth: 1400, margin: '0 auto' }}>
+                {/* ── Header ── */}
+                <div style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 14,
+                    marginBottom: isMobile ? 14 : 20, flexWrap: 'wrap',
+                    opacity: pageLoaded ? 1 : 0, transition: 'opacity 420ms ease 80ms'
+                }}>
+                    <div>
+                        <h2 style={{ margin: 0, fontSize: isMobile ? 22 : 28, fontWeight: 900, color: '#0f172a', letterSpacing: '-0.03em' }}>
+                            Quản lý đơn hàng
+                        </h2>
+                        <p style={{ margin: '6px 0 0', color: '#64748b', fontSize: isMobile ? 12 : 14, lineHeight: 1.7 }}>
+                            Theo dõi, chỉnh sửa và xử lý đơn hàng trong một giao diện gọn gàng.
+                        </p>
                     </div>
-                    <button
-                        type="button"
-                        onClick={() => setIsCreateOrderOpen(true)}
-                        style={{ padding: '12px 18px', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg, #2563eb, #60a5fa)', color: 'white', fontWeight: 800, cursor: 'pointer', boxShadow: '0 14px 28px rgba(37,99,235,0.22)', fontFamily: 'inherit', transition: 'transform 160ms ease, box-shadow 160ms ease, filter 160ms ease' }}
-                        onMouseEnter={(e) => {
-                            e.currentTarget.style.transform = 'translateY(-1px)';
-                            e.currentTarget.style.boxShadow = '0 18px 34px rgba(37,99,235,0.28)';
-                            e.currentTarget.style.filter = 'brightness(1.03)';
-                        }}
-                        onMouseLeave={(e) => {
-                            e.currentTarget.style.transform = 'translateY(0)';
-                            e.currentTarget.style.boxShadow = '0 14px 28px rgba(37,99,235,0.22)';
-                            e.currentTarget.style.filter = 'brightness(1)';
-                        }}
-                    >
-                        + Tạo đơn hàng
+                    <button type="button" onClick={openAdd} style={{
+                        padding: isMobile ? '11px 16px' : '12px 18px',
+                        borderRadius: 14, border: 'none',
+                        background: 'linear-gradient(135deg, #2563eb, #60a5fa)',
+                        color: '#fff', fontWeight: 800, cursor: 'pointer', fontSize: isMobile ? 13 : 14,
+                        boxShadow: '0 14px 28px rgba(37,99,235,0.22)',
+                        transition: 'transform 160ms ease, box-shadow 160ms ease',
+                        display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0
+                    }}>
+                        <i className="ri-add-line" style={{ fontSize: 16 }} />
+                        Tạo đơn hàng
                     </button>
                 </div>
 
-                <div style={{ ...pageStyles.heroStats, marginBottom: '40px' }}>
-                    <div
-                        style={{
-                            ...pageStyles.statCard,
-                            transform: hoveredStat === 'total' ? 'translateY(-4px)' : 'translateY(0)',
-                            boxShadow: hoveredStat === 'total' ? '0 18px 34px rgba(37,99,235,0.14)' : pageStyles.statCard.boxShadow,
-                            borderColor: hoveredStat === 'total' ? 'rgba(37,99,235,0.22)' : pageStyles.statCard.border,
-                        }}
-                        onMouseEnter={() => setHoveredStat('total')}
-                        onMouseLeave={() => setHoveredStat(null)}
-                    >
-                        <div style={{ ...pageStyles.statBadge, background: '#eff6ff', color: '#2563eb' }}>
-                            {statIcons.total}
+                {/* ── Stats ── */}
+                <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: `repeat(${statCols}, minmax(0, 1fr))`,
+                    gap: isMobile ? 10 : 14,
+                    marginBottom: isMobile ? 14 : 22,
+                    opacity: pageLoaded ? 1 : 0, transition: 'opacity 420ms ease 120ms'
+                }}>
+                    {[
+                        { key: 'total', label: 'Tổng đơn', value: stats.total, bg: '#eff6ff', color: '#2563eb', icon: 'ri-file-list-3-line' },
+                        { key: 'pending', label: 'Chờ duyệt', value: stats.pending, bg: '#fffbeb', color: '#d97706', icon: 'ri-time-line' },
+                        { key: 'completed', label: 'Đã hoàn tất', value: stats.completed, bg: '#ecfdf5', color: '#16a34a', icon: 'ri-checkbox-circle-line' },
+                        { key: 'issues', label: 'Đơn lỗi', value: stats.issues, bg: '#fef2f2', color: '#dc2626', icon: 'ri-error-warning-line' },
+                    ].map((s) => (
+                        <div key={s.key} style={{
+                            borderRadius: cardR, padding: isMobile ? '14px' : '18px',
+                            background: '#fff', boxShadow: '0 12px 24px rgba(15,23,42,0.08)',
+                            border: '1px solid rgba(148,163,184,0.18)',
+                            minHeight: isMobile ? 86 : 104,
+                        }}>
+                            <div style={{
+                                width: isMobile ? 38 : 40, height: isMobile ? 38 : 40, borderRadius: 12,
+                                background: s.bg, color: s.color, display: 'grid', placeItems: 'center',
+                                marginBottom: isMobile ? 10 : 12, fontSize: 20, boxShadow: `0 8px 18px ${s.bg}`
+                            }}>
+                                <i className={s.icon} />
+                            </div>
+                            <p style={{ margin: 0, color: '#64748b', fontSize: isMobile ? 10 : 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                {s.label}
+                            </p>
+                            <div style={{ margin: '8px 0 0', fontSize: isMobile ? 22 : 30, fontWeight: 900, color: '#0f172a', letterSpacing: '-0.04em' }}>
+                                {s.value}
+                            </div>
                         </div>
-                        <p style={pageStyles.statLabel}>Tổng đơn</p>
-                        <p style={pageStyles.statValue}>{stats.total}</p>
+                    ))}
+                </div>
+
+                {/* ── Section ── */}
+                <div style={{
+                    background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(10px)',
+                    border: '1px solid rgba(148,163,184,0.18)', borderRadius: cardR,
+                    boxShadow: '0 20px 50px rgba(15,23,42,0.08)',
+                    marginBottom: 22, overflow: 'hidden',
+                    opacity: pageLoaded ? 1 : 0, transition: 'opacity 460ms ease 180ms'
+                }}>
+                    {/* Section Header */}
+                    <div style={{ padding: isMobile ? '14px' : '20px 20px 0' }}>
+                        <h3 style={{ margin: 0, fontSize: isMobile ? 15 : 18, fontWeight: 900, color: '#0f172a', letterSpacing: '-0.02em' }}>
+                            Danh sách đơn hàng
+                        </h3>
+                        <p style={{ margin: '6px 0 12px', color: '#64748b', fontSize: isMobile ? 11 : 13, lineHeight: 1.6 }}>
+                            Theo dõi tiến độ và xử lý nhanh các đơn đang chờ hoặc bị trả về.
+                        </p>
                     </div>
-                    <div
-                        style={{
-                            ...pageStyles.statCard,
-                            transform: hoveredStat === 'pending' ? 'translateY(-4px)' : 'translateY(0)',
-                            boxShadow: hoveredStat === 'pending' ? '0 18px 34px rgba(245,158,11,0.14)' : pageStyles.statCard.boxShadow,
-                            borderColor: hoveredStat === 'pending' ? 'rgba(245,158,11,0.22)' : pageStyles.statCard.border,
-                        }}
-                        onMouseEnter={() => setHoveredStat('pending')}
-                        onMouseLeave={() => setHoveredStat(null)}
-                    >
-                        <div style={{ ...pageStyles.statBadge, background: '#fffbeb', color: '#d97706' }}>
-                            {statIcons.pending}
+
+                    {/* Filters */}
+                    <div style={{ padding: isMobile ? '0 14px 14px' : '0 20px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                            <label style={{
+                                display: 'flex', alignItems: 'center', gap: 8,
+                                padding: '10px 14px', borderRadius: 14,
+                                border: '1px solid #cbd5e1', background: '#fff',
+                                minWidth: 0, flex: isMobile ? '1 1 100%' : isTablet ? '1 1 220px' : '1 1 280px',
+                                boxShadow: '0 8px 18px rgba(15,23,42,0.04)'
+                            }}>
+                                <i className="ri-search-line" style={{ color: '#94a3b8', fontSize: 16, flexShrink: 0 }} />
+                                <input
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    placeholder="Tìm mã đơn, khách hàng..."
+                                    style={{ border: 'none', outline: 'none', width: '100%', fontSize: 13, background: 'transparent', color: '#0f172a' }}
+                                />
+                            </label>
+                            <select
+                                value={statusFilter}
+                                onChange={(e) => setStatusFilter(e.target.value)}
+                                style={{
+                                    padding: '10px 14px', borderRadius: 14,
+                                    border: '1px solid #cbd5e1', background: '#fff',
+                                    fontSize: 13, color: '#0f172a', cursor: 'pointer',
+                                    fontWeight: 600, flex: isMobile ? '1 1 100%' : '0 0 auto',
+                                    minWidth: isMobile ? '100%' : 160
+                                }}
+                            >
+                                <option value="all">Tất cả trạng thái</option>
+                                <option value="pending">Đang chờ duyệt</option>
+                                <option value="returned">Bị từ chối</option>
+                                <option value="warehouse_processing">Kho đang xuất</option>
+                                <option value="completed">Đã hoàn tất</option>
+                                <option value="waiting_sales">Đang đợi Sales</option>
+                                <option value="return_to_sales">Hoàn về Sales</option>
+                                <option value="customer_rejected">Khách từ chối</option>
+                            </select>
+                            <div style={{
+                                padding: '10px 14px', borderRadius: 14,
+                                border: '1px solid #e2e8f0', background: '#f8fafc',
+                                color: '#475569', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap'
+                            }}>
+                                {filteredOrders.length} / {orders.length} đơn
+                            </div>
+                            {(searchTerm || statusFilter !== 'all') && (
+                                <button
+                                    type="button" onClick={() => { setSearchTerm(''); setStatusFilter('all'); }}
+                                    style={{
+                                        padding: '10px 14px', borderRadius: 14,
+                                        border: '1px solid #dbe3ee', background: '#fff',
+                                        color: '#334155', fontWeight: 700, fontSize: 12, cursor: 'pointer'
+                                    }}
+                                >
+                                    Xóa lọc
+                                </button>
+                            )}
                         </div>
-                        <p style={pageStyles.statLabel}>Chờ duyệt</p>
-                        <p style={pageStyles.statValue}>{stats.pending}</p>
                     </div>
-                    <div
-                        style={{
-                            ...pageStyles.statCard,
-                            transform: hoveredStat === 'completed' ? 'translateY(-4px)' : 'translateY(0)',
-                            boxShadow: hoveredStat === 'completed' ? '0 18px 34px rgba(22,163,74,0.14)' : pageStyles.statCard.boxShadow,
-                            borderColor: hoveredStat === 'completed' ? 'rgba(22,163,74,0.22)' : pageStyles.statCard.border,
-                        }}
-                        onMouseEnter={() => setHoveredStat('completed')}
-                        onMouseLeave={() => setHoveredStat(null)}
-                    >
-                        <div style={{ ...pageStyles.statBadge, background: '#ecfdf5', color: '#16a34a' }}>
-                            {statIcons.completed}
-                        </div>
-                        <p style={pageStyles.statLabel}>Đã hoàn tất</p>
-                        <p style={pageStyles.statValue}>{stats.completed}</p>
-                    </div>
-                    <div
-                        style={{
-                            ...pageStyles.statCard,
-                            transform: hoveredStat === 'issues' ? 'translateY(-4px)' : 'translateY(0)',
-                            boxShadow: hoveredStat === 'issues' ? '0 18px 34px rgba(220,38,38,0.14)' : pageStyles.statCard.boxShadow,
-                            borderColor: hoveredStat === 'issues' ? 'rgba(220,38,38,0.22)' : pageStyles.statCard.border,
-                        }}
-                        onMouseEnter={() => setHoveredStat('issues')}
-                        onMouseLeave={() => setHoveredStat(null)}
-                    >
-                        <div style={{ ...pageStyles.statBadge, background: '#fef2f2', color: '#dc2626' }}>
-                            {statIcons.issues}
-                        </div>
-                        <p style={pageStyles.statLabel}>Đơn lỗi</p>
-                        <p style={pageStyles.statValue}>{stats.issues}</p>
+
+                    {/* Table / List */}
+                    <div style={{ padding: isMobile ? '0 0 12px' : '0 20px 20px' }}>
+                        {orders.length === 0 ? (
+                            <div style={{ padding: '40px 20px', textAlign: 'center', color: '#64748b' }}>Chưa có đơn hàng nào.</div>
+                        ) : filteredOrders.length === 0 ? (
+                            <div style={{ padding: '40px 20px', textAlign: 'center', color: '#64748b' }}>Không tìm thấy đơn hàng phù hợp.</div>
+                        ) : isMobile ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 4 }}>
+                                {filteredOrders.map((o, index) => {
+                                    const status = statusConfig[o.status] ? o.status : 'pending';
+                                    const cfg = statusConfig[status];
+                                    const tone = toneStyles[cfg.tone];
+                                    return (
+                                        <div
+                                            key={o.id}
+                                            style={{
+                                                borderRadius: 16, padding: '14px',
+                                                border: '1px solid #e2e8f0',
+                                                background: hoveredRowId === o.id ? '#f8fbff' : '#fff',
+                                                boxShadow: hoveredRowId === o.id ? '0 8px 20px rgba(15,23,42,0.06)' : '0 2px 8px rgba(15,23,42,0.03)',
+                                                opacity: pageLoaded ? 1 : 0,
+                                                transition: `opacity 360ms ease ${120 + index * 50}ms, background 180ms ease, box-shadow 180ms ease`
+                                            }}
+                                            onMouseEnter={() => setHoveredRowId(o.id)}
+                                            onMouseLeave={() => setHoveredRowId(null)}
+                                        >
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
+                                                <div>
+                                                    <div style={{ fontWeight: 900, color: '#2563eb', fontSize: 14 }}>{o.order_no}</div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#475569', marginTop: 2 }}>
+                                                        <i className="ri-user-line" style={{ fontSize: 13, color: '#94a3b8' }} />
+                                                        {o.customer_name || '—'}
+                                                    </div>
+                                                </div>
+                                                <span style={{ ...tone, display: 'inline-flex', alignItems: 'center', padding: '4px 10px', borderRadius: 999, fontSize: 11, fontWeight: 800, flexShrink: 0 }}>
+                                                    {cfg.label}
+                                                </span>
+                                            </div>
+                                            <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.6, marginBottom: 8 }}>
+                                                {formatOrderItems(o)}
+                                            </div>
+                                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                                {status === 'completed' && (
+                                                    <button onClick={() => openView(o)} style={{ padding: '7px 12px', borderRadius: 10, border: 'none', background: '#eff6ff', color: '#1d4ed8', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>
+                                                        <i className="ri-eye-line" style={{ marginRight: 4, fontSize: 13 }} />Xem
+                                                    </button>
+                                                )}
+                                                {status === 'canceled' && (
+                                                    <button onClick={() => openCancelModal(o)} style={{ padding: '7px 12px', borderRadius: 10, border: '1px solid #fecaca', background: '#fff1f2', color: '#be123c', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>
+                                                        <i className="ri-eye-line" style={{ marginRight: 4, fontSize: 13 }} />Lý do hủy
+                                                    </button>
+                                                )}
+                                                {status === 'returned' && (
+                                                    <button onClick={() => openErrorModal(o)} style={{ padding: '7px 12px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg, #dc2626, #ef4444)', color: '#fff', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>
+                                                        Xem lỗi & xử lý
+                                                    </button>
+                                                )}
+                                                {status === 'customer_rejected' && (
+                                                    <button onClick={() => openRejectModal(o)} style={{ padding: '7px 12px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg, #ea580c, #f97316)', color: '#fff', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>
+                                                        <i className="ri-settings-line" style={{ marginRight: 4, fontSize: 13 }} />Xử lý
+                                                    </button>
+                                                )}
+                                                {status === 'pending' && (
+                                                    <>
+                                                        <button onClick={() => openEdit(o)} style={{ padding: '7px 12px', borderRadius: 10, border: '1px solid #93c5fd', background: '#eff6ff', color: '#1d4ed8', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>
+                                                            <i className="ri-edit-line" style={{ marginRight: 4, fontSize: 13 }} />Sửa
+                                                        </button>
+                                                        <button onClick={() => handleDelete(o)} style={{ padding: '7px 12px', borderRadius: 10, border: '1px solid #fecaca', background: '#fff1f2', color: '#be123c', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>
+                                                            <i className="ri-delete-bin-line" style={{ marginRight: 4, fontSize: 13 }} />Xóa
+                                                        </button>
+                                                    </>
+                                                )}
+                                                {(status === 'waiting_sales' || status === 'return_to_sales') && (
+                                                    <>
+                                                        <button onClick={() => openEdit(o)} style={{ padding: '7px 12px', borderRadius: 10, border: '1px solid #fbbf24', background: '#fffbeb', color: '#b45309', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>
+                                                            <i className="ri-edit-line" style={{ marginRight: 4, fontSize: 13 }} />Sửa đơn
+                                                        </button>
+                                                        {status === 'return_to_sales' && (
+                                                            <button onClick={() => handleReturnToWarehouse(o)} style={{ padding: '7px 12px', borderRadius: 10, border: '1px solid #16a34a', background: '#f0fdf4', color: '#15803d', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>
+                                                                <i className="ri-arrow-go-back-line" style={{ marginRight: 4, fontSize: 13 }} />Hoàn đơn lại vào kho
+                                                            </button>
+                                                        )}
+                                                        <button onClick={() => handleDelete(o)} style={{ padding: '7px 12px', borderRadius: 10, border: '1px solid #fecaca', background: '#fff1f2', color: '#be123c', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>
+                                                            <i className="ri-delete-bin-line" style={{ marginRight: 4, fontSize: 13 }} />Xóa đơn
+                                                        </button>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <div style={{ overflowX: 'auto', borderRadius: isMobile ? 12 : 18, border: '1px solid #e2e8f0' }}>
+                                <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, minWidth: isTablet ? 700 : 900 }}>
+                                    <thead>
+                                        <tr style={{ background: '#f8fafc' }}>
+                                            {['Mã đơn', 'Khách hàng', 'Sản phẩm', 'Ngày giao dự kiến', 'Trạng thái', 'Hành động'].map((h) => (
+                                                <th key={h} style={{
+                                                    textAlign: 'left', padding: '12px 16px',
+                                                    fontSize: 12, textTransform: 'uppercase',
+                                                    letterSpacing: '0.06em', color: '#64748b',
+                                                    borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap'
+                                                }}>{h}</th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {filteredOrders.map((o, index) => {
+                                            const status = statusConfig[o.status] ? o.status : 'pending';
+                                            const cfg = statusConfig[status];
+                                            const tone = toneStyles[cfg.tone];
+                                            const isHovered = hoveredRowId === o.id;
+                                            return (
+                                                <tr key={o.id}
+                                                    onMouseEnter={() => setHoveredRowId(o.id)}
+                                                    onMouseLeave={() => setHoveredRowId(null)}
+                                                    style={{
+                                                        background: isHovered ? 'linear-gradient(90deg, rgba(37,99,235,0.04), #fff)' : '#fff',
+                                                        opacity: pageLoaded ? 1 : 0,
+                                                        transition: `opacity 360ms ease ${120 + index * 50}ms, background 180ms ease`,
+                                                    }}
+                                                >
+                                                    <td style={{ padding: '14px 16px', borderBottom: '1px solid #e2e8f0', fontWeight: 800, color: '#2563eb', whiteSpace: 'nowrap' }}>{o.order_no}</td>
+                                                    <td style={{ padding: '14px 16px', borderBottom: '1px solid #e2e8f0', color: '#334155', verticalAlign: 'top' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                            <i className="ri-user-line" style={{ color: '#94a3b8', fontSize: 14, flexShrink: 0 }} />
+                                                            <span>{o.customer_name || '—'}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td style={{ padding: '14px 16px', borderBottom: '1px solid #e2e8f0', color: '#475569', fontSize: 13, lineHeight: 1.6, maxWidth: isTablet ? 160 : 340 }}>{formatOrderItems(o)}</td>
+                                                    <td style={{ padding: '14px 16px', borderBottom: '1px solid #e2e8f0', color: '#334155', whiteSpace: 'nowrap' }}>
+                                                        {o.expected_delivery_date ? new Date(o.expected_delivery_date).toLocaleDateString('vi-VN') : '—'}
+                                                    </td>
+                                                    <td style={{ padding: '14px 16px', borderBottom: '1px solid #e2e8f0' }}>
+                                                        <span style={{ ...tone, display: 'inline-flex', alignItems: 'center', padding: '6px 10px', borderRadius: 999, fontSize: 12, fontWeight: 800 }}>
+                                                            {cfg.label}
+                                                        </span>
+                                                        {status === 'waiting_sales' && o.warehouse_note && (
+                                                            <div style={{ marginTop: 6, fontSize: 12, color: '#b45309', fontWeight: 600, lineHeight: 1.4, maxWidth: 200 }}>
+                                                                <i className="ri-error-warning-line" style={{ marginRight: 4, fontSize: 11 }} />
+                                                                Kho: {o.warehouse_note}
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                    <td style={{ padding: '14px 16px', borderBottom: '1px solid #e2e8f0' }}>
+                                                        {status === 'completed' && (
+                                                            <button onClick={() => openView(o)} title="Xem chi tiết" style={{ width: 36, height: 36, borderRadius: 10, border: '1px solid #cbd5e1', background: '#fff', color: '#334155', cursor: 'pointer', display: 'grid', placeItems: 'center' }}>
+                                                                <i className="ri-eye-line" style={{ fontSize: 16 }} />
+                                                            </button>
+                                                        )}
+                                                        {status === 'canceled' && (
+                                                            <button onClick={() => openCancelModal(o)} title="Xem lý do hủy" style={{ width: 36, height: 36, borderRadius: 10, border: '1px solid #fecaca', background: '#fff1f2', color: '#be123c', cursor: 'pointer', display: 'grid', placeItems: 'center' }}>
+                                                                <i className="ri-eye-line" style={{ fontSize: 16 }} />
+                                                            </button>
+                                                        )}
+                                                        {status === 'returned' && (
+                                                            <button onClick={() => openErrorModal(o)} style={{ padding: '8px 12px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg, #dc2626, #ef4444)', color: '#fff', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>
+                                                                Xem lỗi
+                                                            </button>
+                                                        )}
+                                                        {status === 'customer_rejected' && (
+                                                            <button onClick={() => openRejectModal(o)} title="Xử lý đơn khách từ chối" style={{ width: 36, height: 36, borderRadius: 10, border: '1px solid #fb923c', background: '#fff7ed', color: '#c2410c', cursor: 'pointer', display: 'grid', placeItems: 'center' }}>
+                                                                <i className="ri-settings-line" style={{ fontSize: 15 }} />
+                                                            </button>
+                                                        )}
+                                                        {status === 'pending' && (
+                                                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                                                <button onClick={() => openEdit(o)} title="Sửa đơn" style={{ width: 36, height: 36, borderRadius: 10, border: '1px solid #93c5fd', background: '#eff6ff', color: '#1d4ed8', cursor: 'pointer', display: 'grid', placeItems: 'center' }}>
+                                                                    <i className="ri-edit-line" style={{ fontSize: 15 }} />
+                                                                </button>
+                                                                <button onClick={() => handleDelete(o)} title="Xóa đơn" style={{ width: 36, height: 36, borderRadius: 10, border: '1px solid #fecaca', background: '#fff1f2', color: '#be123c', cursor: 'pointer', display: 'grid', placeItems: 'center' }}>
+                                                                    <i className="ri-delete-bin-line" style={{ fontSize: 15 }} />
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                        {(status === 'waiting_sales' || status === 'return_to_sales') && (
+                                                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                                                <button onClick={() => openEdit(o)} title="Sửa đơn" style={{ width: 36, height: 36, borderRadius: 10, border: '1px solid #fbbf24', background: '#fffbeb', color: '#b45309', cursor: 'pointer', display: 'grid', placeItems: 'center' }}>
+                                                                    <i className="ri-edit-line" style={{ fontSize: 15 }} />
+                                                                </button>
+                                                                {status === 'return_to_sales' && (
+                                                                    <button onClick={() => handleReturnToWarehouse(o)} title="Hoàn đơn lại vào kho" style={{ width: 36, height: 36, borderRadius: 10, border: '1px solid #16a34a', background: '#f0fdf4', color: '#15803d', cursor: 'pointer', display: 'grid', placeItems: 'center' }}>
+                                                                        <i className="ri-arrow-go-back-line" style={{ fontSize: 15 }} />
+                                                                    </button>
+                                                                )}
+                                                                <button onClick={() => handleDelete(o)} title="Xóa đơn" style={{ width: 36, height: 36, borderRadius: 10, border: '1px solid #fecaca', background: '#fff1f2', color: '#be123c', cursor: 'pointer', display: 'grid', placeItems: 'center' }}>
+                                                                    <i className="ri-delete-bin-line" style={{ fontSize: 15 }} />
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                        {['warehouse_processing', 'shipping', 'logistics_review'].includes(status) && (
+                                                            <button onClick={() => openView(o)} title="Xem chi tiết" style={{ width: 36, height: 36, borderRadius: 10, border: '1px solid #cbd5e1', background: '#fff', color: '#334155', cursor: 'pointer', display: 'grid', placeItems: 'center' }}>
+                                                                <i className="ri-eye-line" style={{ fontSize: 16 }} />
+                                                            </button>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
 
-            {isCreateOrderOpen && (
-                <div className="modal-overlay-fade" style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.62)', backdropFilter: 'blur(8px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: 20 }}>
-                    <div className="modal-panel-fade" style={{ background: 'white', width: 'min(1100px, 100%)', maxHeight: '92vh', overflowY: 'auto', borderRadius: 24, border: '1px solid #e5eef8', boxShadow: '0 30px 80px rgba(15, 23, 42, 0.22)', transformOrigin: 'center' }}>
-                        <div style={{ padding: '22px 24px', borderBottom: '1px solid #eef2f7', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            {/* ── Create/Edit Modal ── */}
+            {isFormOpen && createPortal(
+                <div
+                    style={{
+                        position: 'fixed', inset: 0,
+                        background: isFormVisible ? 'rgba(15,23,42,0.6)' : 'rgba(15,23,42,0)',
+                        backdropFilter: isFormVisible ? 'blur(8px)' : 'none',
+                        zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        padding: pad, transition: 'background 220ms ease, backdrop-filter 220ms ease',
+                    }}
+                    onClick={closeForm}
+                >
+                    <div
+                        style={{
+                            width: '100%', maxWidth: 1100,
+                            maxHeight: '92dvh', overflowY: 'auto',
+                            background: '#fff', borderRadius: cardR,
+                            boxShadow: '0 30px 80px rgba(15,23,42,0.22)',
+                            border: '1px solid #e5eef8',
+                            transform: isFormVisible ? 'scale(1)' : 'scale(0.97)',
+                            opacity: isFormVisible ? 1 : 0,
+                            transition: 'transform 220ms ease, opacity 220ms ease',
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Modal Header */}
+                        <div style={{ padding: isMobile ? '16px' : '22px 24px', borderBottom: '1px solid #eef2f7', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
                             <div>
-                                <div style={{ fontSize: 13, color: '#2563eb', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Tạo đơn hàng</div>
-                                <h3 style={{ margin: '6px 0 0', fontSize: 22, color: '#0f172a' }}>{editingId ? `Chỉnh sửa đơn ${orderNo}` : 'Tạo đơn hàng mới'}</h3>
+                                <div style={{ fontSize: 11, color: '#2563eb', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
+                                    {editingId ? 'Chỉnh sửa đơn' : 'Tạo đơn hàng'}
+                                </div>
+                                <h3 style={{ margin: 0, fontSize: isMobile ? 18 : 22, color: '#0f172a', letterSpacing: '-0.02em' }}>
+                                    {editingId ? `Đơn ${orderNo}` : 'Tạo đơn hàng mới'}
+                                </h3>
                             </div>
-                            <button type="button" onClick={cancelEdit} style={{ width: 40, height: 40, borderRadius: 12, border: '1px solid #dbe3ee', background: '#fff', cursor: 'pointer', fontSize: 18 }}>×</button>
+                            <button type="button" onClick={closeForm} style={{
+                                width: 36, height: 36, borderRadius: 10,
+                                borderWidth: '1px', borderStyle: 'solid', borderColor: '#dbe3ee',
+                                background: '#fff', color: '#0f172a', cursor: 'pointer',
+                                fontSize: 18, fontWeight: 700, display: 'grid', placeItems: 'center'
+                            }}>
+                                ×
+                            </button>
                         </div>
 
-                        <div style={{ padding: '24px' }}>
+                        {/* Modal Body */}
+                        <div style={{ padding: isMobile ? '16px' : '24px' }}>
                             <form onSubmit={handleSubmit}>
-                                <div style={pageStyles.formGrid}>
+                                {/* Row 1: Mã đơn - Khách hàng - Ngày giao dự kiến */}
+                                <div style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: isMobile
+                                        ? '1fr'
+                                        : isTablet
+                                        ? 'repeat(2, minmax(0, 1fr))'
+                                        : '1fr 1.5fr 1fr',
+                                    gap: 14, marginBottom: 14
+                                }}>
+                                    {/* Mã đơn hàng */}
                                     <div>
-                                        <label style={{ display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 700, color: '#334155' }}>Khách hàng</label>
-                                        <select required value={customerId} onChange={(e) => setCustomerId(e.target.value)} style={pageStyles.input}>
+                                        <label style={{ display: 'block', marginBottom: 8, fontSize: 12, fontWeight: 700, color: '#334155' }}>
+                                            Mã đơn hàng
+                                        </label>
+                                        <div style={{
+                                            width: '100%', padding: '12px 14px', borderRadius: 14,
+                                            border: '1px solid #bfdbfe', background: '#eff6ff',
+                                            fontSize: 16, fontWeight: 900, color: '#1d4ed8',
+                                            fontFamily: 'monospace', letterSpacing: '0.06em',
+                                            boxSizing: 'border-box'
+                                        }}>
+                                            {editingId ? orderNo : 'Sẽ được sinh khi gửi'}
+                                        </div>
+                                        <div style={{ marginTop: 6, fontSize: 11, color: '#94a3b8' }}>
+                                            {editingId ? 'Mã đơn gốc' : 'Mã được sinh tự động khi bạn nhấn Gửi đơn'}
+                                        </div>
+                                    </div>
+
+                                    {/* Khách hàng */}
+                                    <div>
+                                        <label style={{ display: 'block', marginBottom: 8, fontSize: 12, fontWeight: 700, color: '#334155' }}>
+                                            Khách hàng <span style={{ color: '#ef4444' }}>*</span>
+                                        </label>
+                                        <select
+                                            required value={customerId}
+                                            onChange={(e) => setCustomerId(e.target.value)}
+                                            style={{ width: '100%', padding: '12px 14px', borderRadius: 14, border: '1px solid #cbd5e1', background: '#fff', outline: 'none', fontSize: 14, color: '#0f172a', boxSizing: 'border-box' }}
+                                        >
                                             <option value="">-- Chọn khách hàng --</option>
                                             {customers.map((c) => (
-                                                <option key={c.id} value={c.id}>
-                                                    {c.company_name}
-                                                </option>
+                                                <option key={c.id} value={c.id}>{c.company_name}</option>
                                             ))}
                                         </select>
                                     </div>
+
+                                    {/* Ngày giao dự kiến */}
                                     <div>
-                                        <label style={{ display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 700, color: '#334155' }}>Ngày giao dự kiến</label>
-                                        <input required type="date" value={expectedDate} onChange={(e) => setExpectedDate(e.target.value)} style={pageStyles.input} />
+                                        <label style={{ display: 'block', marginBottom: 8, fontSize: 12, fontWeight: 700, color: '#334155' }}>
+                                            Ngày giao dự kiến <span style={{ color: '#ef4444' }}>*</span>
+                                        </label>
+                                        <input
+                                            required type="date" value={expectedDate}
+                                            onChange={(e) => setExpectedDate(e.target.value)}
+                                            style={{ width: '100%', padding: '12px 14px', borderRadius: 14, border: '1px solid #cbd5e1', background: '#fff', outline: 'none', fontSize: 14, color: '#0f172a', boxSizing: 'border-box' }}
+                                        />
                                     </div>
                                 </div>
 
-                                <div style={{ marginTop: 16 }}>
-                                    <label style={{ display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 700, color: '#334155' }}>Ghi chú</label>
-                                    <textarea placeholder="Địa chỉ giao hàng" value={note} onChange={(e) => setNote(e.target.value)} style={pageStyles.textarea} />
+                                {/* Lý do Kho từ chối (chỉ đọc) */}
+                                {warehouseNote && (
+                                    <div style={{ marginBottom: 14, padding: '12px 14px', borderRadius: 14, background: '#fff7ed', border: '1px solid #fed7aa' }}>
+                                        <div style={{ fontSize: 12, fontWeight: 700, color: '#9a3412', marginBottom: 4 }}>
+                                            <i className="ri-error-warning-line" style={{ marginRight: 4 }} />
+                                            Lý do Kho từ chối xuất hàng
+                                        </div>
+                                        <div style={{ color: '#9a3412', fontSize: 14, fontWeight: 600 }}>{warehouseNote}</div>
+                                    </div>
+                                )}
+
+                                {/* Row 2: Note */}
+                                <div style={{ marginBottom: 14 }}>
+                                    <label style={{ display: 'block', marginBottom: 8, fontSize: 12, fontWeight: 700, color: '#334155' }}>
+                                        Địa chỉ giao hàng / Ghi chú
+                                    </label>
+                                    <textarea
+                                        value={note} onChange={(e) => setNote(e.target.value)}
+                                        placeholder="Nhập địa chỉ giao hàng hoặc ghi chú..."
+                                        style={{
+                                            width: '100%', padding: '12px 14px', borderRadius: 14,
+                                            border: '1px solid #cbd5e1', background: '#fff', outline: 'none',
+                                            fontSize: 14, color: '#0f172a', boxSizing: 'border-box',
+                                            minHeight: 88, resize: 'vertical', fontFamily: 'inherit'
+                                        }}
+                                    />
                                 </div>
 
-                                <div style={{ marginTop: 22, borderRadius: 18, overflow: 'hidden', border: '1px solid #e2e8f0' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 18px', background: 'linear-gradient(180deg, #f8fafc 0%, #ffffff 100%)', borderBottom: '1px solid #e2e8f0' }}>
+                                {/* Items */}
+                                <div style={{ marginBottom: 20 }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
                                         <div>
-                                            <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>Danh sách sản phẩm</div>
-                                            <div style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>Chọn sản phẩm, số lượng và xem thành tiền ngay bên dưới.</div>
+                                            <div style={{ fontSize: isMobile ? 13 : 15, fontWeight: 800, color: '#0f172a' }}>Danh sách sản phẩm</div>
+                                            <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Chọn sản phẩm, số lượng và xem thành tiền.</div>
                                         </div>
-                                        <button type="button" onClick={addItem} style={{ padding: '11px 16px', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg, #0f766e, #2563eb)', color: 'white', fontWeight: 700, cursor: 'pointer', boxShadow: '0 14px 30px rgba(37,99,235,0.22)', fontFamily: 'inherit', transition: 'transform 160ms ease, box-shadow 160ms ease, filter 160ms ease' }}
-                                            onMouseEnter={(e) => {
-                                                e.currentTarget.style.transform = 'translateY(-1px)';
-                                                e.currentTarget.style.boxShadow = '0 18px 34px rgba(37,99,235,0.28)';
-                                                e.currentTarget.style.filter = 'brightness(1.03)';
-                                            }}
-                                            onMouseLeave={(e) => {
-                                                e.currentTarget.style.transform = 'translateY(0)';
-                                                e.currentTarget.style.boxShadow = '0 14px 30px rgba(37,99,235,0.22)';
-                                                e.currentTarget.style.filter = 'brightness(1)';
-                                            }}>
-                                            + Thêm sản phẩm
+                                        <button type="button" onClick={() => addItem()} style={{
+                                            padding: '10px 16px', borderRadius: 12, border: 'none',
+                                            background: 'linear-gradient(135deg, #0f766e, #2563eb)',
+                                            color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                                            boxShadow: '0 14px 30px rgba(37,99,235,0.18)',
+                                            display: 'flex', alignItems: 'center', gap: 6
+                                        }}>
+                                            <i className="ri-add-line" style={{ fontSize: 15 }} />
+                                            Thêm sản phẩm
                                         </button>
                                     </div>
 
-                                    <div style={{ overflowX: 'auto' }}>
-                                        <table style={pageStyles.table}>
-                                            <thead>
-                                                <tr style={{ background: '#fff' }}>
-                                                    <th style={{ textAlign: 'left', padding: '14px 18px', color: '#475569', fontSize: 13 }}>Sản phẩm</th>
-                                                    <th style={{ textAlign: 'left', padding: '14px 18px', color: '#475569', fontSize: 13, width: '140px' }}>Số lượng</th>
-                                                    <th style={{ textAlign: 'left', padding: '14px 18px', color: '#475569', fontSize: 13, width: '170px' }}>Đơn giá</th>
-                                                    <th style={{ textAlign: 'left', padding: '14px 18px', color: '#475569', fontSize: 13, width: '170px' }}>Thành tiền</th>
-                                                    <th style={{ width: '90px' }}></th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {selectedItems.length === 0 ? (
-                                                    <tr>
-                                                        <td colSpan="5" style={{ padding: '24px 18px', textAlign: 'center', color: '#64748b' }}>
-                                                            Chưa có sản phẩm nào. Hãy thêm sản phẩm để bắt đầu.
-                                                        </td>
+                                    {selectedItems.length === 0 ? (
+                                        <div style={{ padding: '24px', textAlign: 'center', color: '#64748b', borderRadius: 14, border: '2px dashed #e2e8f0', fontSize: 14 }}>
+                                            Chưa có sản phẩm nào. Nhấn "Thêm sản phẩm" để thêm.
+                                        </div>
+                                    ) : isMobile ? (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                            {selectedItems.map((item, idx) => {
+                                                const qty = Math.max(1, Number(item.quantity) || 1);
+                                                const price = Number(item.unit_price || 0);
+                                                const total = qty * price;
+                                                const prod = products.find((p) => String(p.id) === String(item.product_id));
+                                                return (
+                                                    <div key={item.id || idx} style={{ padding: '12px', borderRadius: 14, border: '1px solid #e2e8f0', background: '#fff' }}>
+                                                        <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
+                                                            <span style={{ fontSize: 11, background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', borderRadius: 999, padding: '2px 8px', fontWeight: 700 }}>
+                                                                {prod?.sku || '—'}
+                                                            </span>
+                                                            <span style={{ fontWeight: 800, fontSize: 13, color: '#0f172a' }}>{prod?.name || '—'}</span>
+                                                        </div>
+                                                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                                            <div style={{ flex: 1 }}>
+                                                                <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Số lượng</label>
+                                                                <input type="number" min="1" value={qty}
+                                                                    onChange={(e) => updateItem(idx, 'quantity', e.target.value)}
+                                                                    style={{ width: '100%', padding: '9px 12px', borderRadius: 10, border: '1px solid #cbd5e1', fontSize: 14, fontWeight: 700, boxSizing: 'border-box' }}
+                                                                />
+                                                            </div>
+                                                            <div style={{ flex: 1 }}>
+                                                                <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Đơn giá</label>
+                                                                <div style={{ padding: '9px 12px', borderRadius: 10, background: '#f0fdf4', color: '#166534', fontWeight: 800, fontSize: 13 }}>{fmt(price)} đ</div>
+                                                            </div>
+                                                            <div style={{ flex: 1 }}>
+                                                                <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Thành tiền</label>
+                                                                <div style={{ padding: '9px 12px', borderRadius: 10, background: '#ecfdf5', color: '#166534', fontWeight: 900, fontSize: 13 }}>{fmt(total)} đ</div>
+                                                            </div>
+                                                            <button type="button" onClick={() => removeItem(idx)} style={{
+                                                                width: 36, height: 36, marginTop: 18, borderRadius: 10,
+                                                                borderWidth: '1px', borderStyle: 'solid', borderColor: '#fecaca',
+                                                                background: '#fff1f2', color: '#e11d48', cursor: 'pointer',
+                                                                display: 'grid', placeItems: 'center', fontSize: 18, fontWeight: 700
+                                                            }}>×</button>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    ) : (
+                                        <div style={{ overflowX: 'auto', borderRadius: 16, border: '1px solid #e2e8f0' }}>
+                                            <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, minWidth: 700 }}>
+                                                <thead>
+                                                    <tr style={{ background: '#f8fafc' }}>
+                                                        <th style={{ textAlign: 'left', padding: '12px 16px', color: '#475569', fontSize: 13, width: 130 }}>Mã SKU</th>
+                                                        <th style={{ textAlign: 'left', padding: '12px 16px', color: '#475569', fontSize: 13 }}>Sản phẩm</th>
+                                                        <th style={{ textAlign: 'left', padding: '12px 16px', color: '#475569', fontSize: 13, width: 110 }}>Số lượng</th>
+                                                        <th style={{ textAlign: 'left', padding: '12px 16px', color: '#475569', fontSize: 13, width: 150 }}>Đơn giá</th>
+                                                        <th style={{ textAlign: 'left', padding: '12px 16px', color: '#475569', fontSize: 13, width: 150 }}>Thành tiền</th>
+                                                        <th style={{ width: 60 }} />
                                                     </tr>
-                                                ) : (
-                                                    selectedItems.map((item, index) => {
-                                                        const normalizedItem = normalizeOrderItems({ items: [item] })[0] || item;
-                                                        const quantity = Math.max(1, Number(item.quantity) || 1);
-                                                        const unitPrice = Number(item.unit_price || 0);
-                                                        const lineTotal = quantity * unitPrice;
+                                                </thead>
+                                                <tbody>
+                                                    {selectedItems.map((item, idx) => {
+                                                        const qty = Math.max(1, Number(item.quantity) || 1);
+                                                        const price = Number(item.unit_price || 0);
+                                                        const total = qty * price;
+                                                        const prod = products.find((p) => String(p.id) === String(item.product_id));
                                                         return (
-                                                            <tr key={item.id || index} style={{ borderTop: '1px solid #e2e8f0' }}>
-                                                                <td style={{ padding: '16px 18px' }}>
-                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                                                        <div style={{ width: 44, height: 44, borderRadius: 14, background: 'linear-gradient(135deg, #dbeafe, #eff6ff)', display: 'grid', placeItems: 'center', color: '#1d4ed8', flexShrink: 0 }}>
-                                                                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ width: 20, height: 20 }}>
-                                                                                <path d="M4 7.5 12 4l8 3.5-8 3.5-8-3.5Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-                                                                                <path d="M4 7.5V16.5L12 20l8-3.5V7.5" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-                                                                            </svg>
-                                                                        </div>
-                                                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                                                            <select required value={item.product_id} onChange={(e) => updateItem(index, 'product_id', e.target.value)} style={{ ...pageStyles.input, background: '#fff' }}>
-                                                                                <option value="">-- Chọn sản phẩm --</option>
-                                                                                {products.map((p) => (
-                                                                                    <option key={p.id} value={p.id}>
-                                                                                        {p.name}{p.sku ? ` (${p.sku})` : ''}
-                                                                                    </option>
-                                                                                ))}
-                                                                            </select>
-                                                                            <div style={{ fontSize: 12, color: '#64748b', marginTop: 8 }}>
-                                                                                {normalizedItem.product_name}{normalizedItem.product_sku ? ` (${normalizedItem.product_sku})` : ''}
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
+                                                            <tr key={item.id || idx} style={{ borderTop: '1px solid #e2e8f0' }}>
+                                                                <td style={{ padding: '12px 16px' }}>
+                                                                    <span style={{ display: 'inline-flex', alignItems: 'center', padding: '4px 10px', borderRadius: 999, background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1d4ed8', fontSize: 12, fontWeight: 800, fontFamily: 'monospace', letterSpacing: '0.03em' }}>
+                                                                        {prod?.sku || '—'}
+                                                                    </span>
                                                                 </td>
-                                                                <td style={{ padding: '16px 18px' }}>
-                                                                    <div style={{ position: 'relative' }}>
-                                                                        <input type="number" min="1" value={quantity} onChange={(e) => updateItem(index, 'quantity', e.target.value)} style={{ ...pageStyles.input, paddingRight: 46, fontWeight: 700 }} />
-                                                                        <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: '#64748b', fontWeight: 700 }}>SL</span>
-                                                                    </div>
+                                                                <td style={{ padding: '12px 16px' }}>
+                                                                    <select
+                                                                        value={item.product_id}
+                                                                        onChange={(e) => updateItem(idx, 'product_id', e.target.value)}
+                                                                        style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid #cbd5e1', background: '#fff', fontSize: 13, color: '#0f172a', boxSizing: 'border-box' }}
+                                                                    >
+                                                                        <option value="">-- Chọn sản phẩm --</option>
+                                                                        {products.map((p) => (
+                                                                            <option key={p.id} value={p.id}>{p.name}{p.sku ? ` (${p.sku})` : ''}</option>
+                                                                        ))}
+                                                                    </select>
                                                                 </td>
-                                                                <td style={{ padding: '16px 18px', fontWeight: 700, color: '#0f172a' }}>
-                                                                    {formatCurrency(unitPrice)} đ
+                                                                <td style={{ padding: '12px 16px' }}>
+                                                                    <input type="number" min="1" value={qty}
+                                                                        onChange={(e) => updateItem(idx, 'quantity', e.target.value)}
+                                                                        style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid #cbd5e1', fontSize: 14, fontWeight: 700, boxSizing: 'border-box' }}
+                                                                    />
                                                                 </td>
-                                                                <td style={{ padding: '16px 18px' }}>
-                                                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 14, background: 'linear-gradient(135deg, #ecfdf5, #d1fae5)', color: '#166534', fontWeight: 800, border: '1px solid #86efac' }}>
-                                                                        {formatCurrency(lineTotal)} đ
-                                                                    </div>
+                                                                <td style={{ padding: '12px 16px', fontWeight: 700, color: '#0f172a', fontSize: 14 }}>{fmt(price)} đ</td>
+                                                                <td style={{ padding: '12px 16px' }}>
+                                                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderRadius: 12, background: '#ecfdf5', color: '#166534', fontWeight: 800, fontSize: 13 }}>{fmt(total)} đ</div>
                                                                 </td>
-                                                                <td style={{ padding: '16px 18px', textAlign: 'center' }}>
-                                                                    <button type="button" onClick={() => removeItem(index)} style={{ width: 40, height: 40, borderRadius: 12, border: '1px solid #fecaca', background: '#fff1f2', color: '#e11d48', cursor: 'pointer', fontWeight: 800 }}>
-                                                                        ×
-                                                                    </button>
+                                                                <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                                                                    <button type="button" onClick={() => removeItem(idx)} style={{
+                                                                        width: 36, height: 36, borderRadius: 10,
+                                                                        borderWidth: '1px', borderStyle: 'solid', borderColor: '#fecaca',
+                                                                        background: '#fff1f2', color: '#e11d48', cursor: 'pointer',
+                                                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                                                        fontSize: 18, fontWeight: 700
+                                                                    }}>×</button>
                                                                 </td>
                                                             </tr>
                                                         );
-                                                    })
-                                                )}
-                                            </tbody>
-                                        </table>
-                                    </div>
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
                                 </div>
 
-                                <div style={{ display: 'flex', gap: 12, marginTop: 20, flexWrap: 'wrap' }}>
-                                    <button type="submit" style={{ padding: '13px 20px', borderRadius: 14, border: 'none', background: editingId ? 'linear-gradient(135deg, #ea580c, #f97316)' : 'linear-gradient(135deg, #0f766e, #22c55e)', color: 'white', fontWeight: 800, cursor: 'pointer', boxShadow: '0 14px 30px rgba(15,118,110,0.18)', fontFamily: 'inherit', transition: 'transform 160ms ease, box-shadow 160ms ease, filter 160ms ease' }}
-                                        onMouseEnter={(e) => {
-                                            e.currentTarget.style.transform = 'translateY(-1px)';
-                                            e.currentTarget.style.boxShadow = '0 18px 34px rgba(15,118,110,0.24)';
-                                            e.currentTarget.style.filter = 'brightness(1.03)';
-                                        }}
-                                        onMouseLeave={(e) => {
-                                            e.currentTarget.style.transform = 'translateY(0)';
-                                            e.currentTarget.style.boxShadow = '0 14px 30px rgba(15,118,110,0.18)';
-                                            e.currentTarget.style.filter = 'brightness(1)';
-                                        }}>
+                                {/* Submit */}
+                                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                                    <button type="button" onClick={closeForm} style={{
+                                        padding: '12px 18px', borderRadius: 12,
+                                        borderWidth: '1px', borderStyle: 'solid', borderColor: '#cbd5e1',
+                                        background: '#fff', color: '#334155', fontWeight: 700, fontSize: 14, cursor: 'pointer'
+                                    }}>
+                                        Hủy
+                                    </button>
+                                    <button type="submit" style={{
+                                        padding: '12px 20px', borderRadius: 12, border: 'none',
+                                        background: editingId ? 'linear-gradient(135deg, #ea580c, #f97316)' : 'linear-gradient(135deg, #0f766e, #22c55e)',
+                                        color: '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer',
+                                        boxShadow: '0 14px 30px rgba(15,118,110,0.18)',
+                                        display: 'flex', alignItems: 'center', gap: 6
+                                    }}>
                                         {editingId ? 'Lưu & Gửi lại' : 'Gửi đơn cho Logistics'}
                                     </button>
-                                    {editingId && (
-                                        <button type="button" onClick={cancelEdit} style={{ padding: '13px 20px', borderRadius: 14, border: '1px solid #cbd5e1', background: '#fff', color: '#334155', fontWeight: 700, cursor: 'pointer' }}>
-                                            Hủy chỉnh sửa
-                                        </button>
-                                    )}
                                 </div>
                             </form>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
-            <div className="status-table-animate" style={pageStyles.section}>
-                <div style={pageStyles.sectionHeader}>
-                    <h3 style={pageStyles.sectionTitle}>Danh sách trạng thái đơn hàng</h3>
-                    <p style={pageStyles.sectionDesc}>Theo dõi tiến độ và xử lý nhanh các đơn đang chờ hoặc bị trả về.</p>
-                </div>
-
-                <div style={{ padding: '24px' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.6fr) repeat(2, minmax(180px, 1fr)) auto', gap: 12, marginBottom: 16 }}>
-                        <div style={{ position: 'relative' }}>
-                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', width: 18, height: 18, color: '#94a3b8' }}>
-                                <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.8" />
-                                <path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                            </svg>
-                            <input
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                placeholder="Tìm mã đơn, khách hàng, sản phẩm..."
-                                style={{ ...pageStyles.input, paddingLeft: 42, background: '#fff' }}
-                            />
-                        </div>
-                        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ ...pageStyles.input, background: '#fff' }}>
-                            <option value="all">Tất cả trạng thái</option>
-                            <option value="pending">Đang chờ duyệt</option>
-                            <option value="returned">Bị từ chối</option>
-                            <option value="warehouse_processing">Kho đang xuất</option>
-                            <option value="completed">Đã hoàn tất</option>
-                            <option value="logistics_review">Kho báo lỗi</option>
-                            <option value="canceled">Hủy đơn</option>
-                        </select>
-                        <div style={{ display: 'flex', alignItems: 'center', padding: '0 14px', borderRadius: 14, border: '1px solid #e2e8f0', background: '#f8fafc', color: '#475569', fontWeight: 700 }}>
-                            {filteredOrders.length} / {orders.length} đơn
-                        </div>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setSearchTerm('');
-                                setStatusFilter('all');
-                            }}
-                            style={{ padding: '12px 16px', borderRadius: 14, border: '1px solid #dbe3ee', background: '#fff', color: '#334155', fontWeight: 800, cursor: 'pointer' }}
-                        >
-                            Xóa lọc
-                        </button>
-                    </div>
-
-                    <div style={{ overflowX: 'auto', borderRadius: 18, border: '1px solid #e2e8f0' }}>
-                        <table style={pageStyles.table}>
-                            <thead>
-                                <tr style={{ background: '#f8fafc' }}>
-                                    <th style={{ textAlign: 'left', padding: '14px 18px', color: '#475569', fontSize: 13 }}>Mã đơn</th>
-                                    <th style={{ textAlign: 'left', padding: '14px 18px', color: '#475569', fontSize: 13 }}>Khách hàng</th>
-                                    <th style={{ textAlign: 'left', padding: '14px 18px', color: '#475569', fontSize: 13 }}>Sản phẩm đặt</th>
-                                    <th style={{ textAlign: 'left', padding: '14px 18px', color: '#475569', fontSize: 13 }}>Ngày giao dự kiến</th>
-                                    <th style={{ textAlign: 'left', padding: '14px 18px', color: '#475569', fontSize: 13 }}>Trạng thái</th>
-                                    <th style={{ textAlign: 'left', padding: '14px 18px', color: '#475569', fontSize: 13 }}>Hành động</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredOrders.map((o) => {
-                                    const currentStatus = statusConfig[o.status] ? o.status : 'pending';
-                                    const config = statusConfig[currentStatus];
-                                    const style = toneStyles[config.tone];
-                                    const isHovered = hoveredOrderId === o.id;
-
-                                    return (
-                                        <tr
-                                            key={o.id}
-                                            onMouseEnter={() => setHoveredOrderId(o.id)}
-                                            onMouseLeave={() => setHoveredOrderId(null)}
-                                            style={{
-                                                borderTop: '1px solid #e2e8f0',
-                                                background: isHovered ? 'linear-gradient(90deg, rgba(37,99,235,0.05), rgba(255,255,255,0.98))' : '#fff',
-                                                transform: isHovered ? 'translateY(-2px)' : 'translateY(0)',
-                                                boxShadow: isHovered ? '0 14px 28px rgba(15,23,42,0.08)' : 'none',
-                                                transition: 'transform 180ms ease, box-shadow 180ms ease, background 180ms ease',
-                                            }}
-                                        >
-                                            <td style={{ padding: '16px 18px', fontWeight: 800, color: '#2563eb' }}>{o.order_no}</td>
-                                            <td style={{ padding: '16px 18px', color: '#334155' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                                    <i className="ri-user-line" style={{ color: '#94a3b8', fontSize: 18, flexShrink: 0 }} />
-                                                    <span>{o.customer_name}</span>
-                                                </div>
-                                            </td>
-                                            <td style={{ padding: '16px 18px', color: '#475569', fontSize: 13, lineHeight: 1.6, maxWidth: 420 }}>
-                                                {formatOrderItems(o)}
-                                            </td>
-                                            <td style={{ padding: '16px 18px', color: '#334155' }}>{o.expected_delivery_date ? new Date(o.expected_delivery_date).toLocaleDateString('vi-VN') : '---'}</td>
-                                            <td style={{ padding: '16px 18px' }}>
-                                                <span style={{ ...style, display: 'inline-flex', alignItems: 'center', padding: '8px 12px', borderRadius: 999, fontSize: 12, fontWeight: 800 }}>
-                                                    {config.label}
-                                                </span>
-                                            </td>
-                                            <td style={{ padding: '16px 18px' }}>
-                                                {currentStatus === 'completed' ? (
-                                                    <button type="button" onClick={() => handleViewClick(o)} aria-label="Xem chi tiết đơn hàng" title="Xem chi tiết" style={{ width: 40, height: 40, borderRadius: 0, border: 'none', background: 'transparent', color: '#111827', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: 'none' }}>
-                                                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ width: 20, height: 20 }}>
-                                                            <path d="M2.5 12s3.5-6.5 9.5-6.5S21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-                                                            <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8" />
-                                                        </svg>
-                                                    </button>
-                                                ) : currentStatus === 'canceled' ? (
-                                                    <button type="button" onClick={() => openCancelReason(o)} aria-label="Xem lý do hủy" title="Xem lý do hủy" style={{ width: 40, height: 40, borderRadius: 14, border: '1px solid #fecaca', background: 'linear-gradient(135deg, #fff1f2, #ffe4e6)', color: '#be123c', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 10px 18px rgba(244,63,94,0.12)' }}>
-                                                        <i className="ri-eye-line" style={{ fontSize: 18 }} />
-                                                    </button>
-                                                ) : currentStatus === 'returned' ? (
-                                                    <button onClick={() => { setErrorOrder(o); setIsReasonModalOpen(true); }} style={{ padding: '10px 14px', background: 'linear-gradient(135deg, #dc2626, #ef4444)', color: 'white', border: 'none', borderRadius: 14, cursor: 'pointer', fontWeight: 800, boxShadow: '0 12px 24px rgba(239,68,68,0.18)' }}>
-                                                        Xem lỗi & xử lý
-                                                    </button>
-                                                ) : ['warehouse_processing', 'shipping', 'completed', 'canceled'].includes(currentStatus) ? (
-                                                    <button type="button" onClick={() => handleViewClick(o)} aria-label="Xem chi tiết đơn hàng" title="Xem chi tiết" style={{ width: 40, height: 40, borderRadius: 14, border: '1px solid #cbd5e1', background: 'linear-gradient(135deg, #ffffff, #f8fafc)', color: '#111827', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 10px 18px rgba(15,23,42,0.08)' }}>
-                                                        <i className="ri-eye-line" style={{ fontSize: 18 }} />
-                                                    </button>
-                                                ) : currentStatus === 'pending' ? (
-                                                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                                                        <button
-                                                            onClick={() => handleEditClick(o)}
-                                                            aria-label="Sửa đơn hàng"
-                                                            title="Sửa đơn hàng"
-                                                            style={{
-                                                                width: 40,
-                                                                height: 40,
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                justifyContent: 'center',
-                                                                borderRadius: 14,
-                                                                border: '1px solid #93c5fd',
-                                                                background: 'linear-gradient(135deg, #eff6ff, #dbeafe)',
-                                                                color: '#1d4ed8',
-                                                                cursor: 'pointer',
-                                                                boxShadow: '0 10px 18px rgba(59,130,246,0.12)',
-                                                                transition: 'transform 160ms ease, box-shadow 160ms ease, filter 160ms ease',
-                                                            }}
-                                                            onMouseEnter={(e) => {
-                                                                e.currentTarget.style.transform = 'translateY(-1px)';
-                                                                e.currentTarget.style.boxShadow = '0 14px 24px rgba(59,130,246,0.18)';
-                                                            }}
-                                                            onMouseLeave={(e) => {
-                                                                e.currentTarget.style.transform = 'translateY(0)';
-                                                                e.currentTarget.style.boxShadow = '0 10px 18px rgba(59,130,246,0.12)';
-                                                            }}
-                                                        >
-                                                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ width: 18, height: 18 }}>
-                                                                <path d="M4 20h4l10.5-10.5a1.8 1.8 0 0 0 0-2.55l-1.45-1.45a1.8 1.8 0 0 0-2.55 0L4 16v4Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-                                                                <path d="M13.5 6.5 17.5 10.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                                                            </svg>
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleDelete(o)}
-                                                            aria-label="Xóa đơn hàng"
-                                                            title="Xóa đơn hàng"
-                                                            style={{
-                                                                width: 40,
-                                                                height: 40,
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                justifyContent: 'center',
-                                                                borderRadius: 14,
-                                                                border: '1px solid #fecaca',
-                                                                background: 'linear-gradient(135deg, #fff1f2, #ffe4e6)',
-                                                                color: '#be123c',
-                                                                cursor: 'pointer',
-                                                                boxShadow: '0 10px 18px rgba(244,63,94,0.12)',
-                                                                transition: 'transform 160ms ease, box-shadow 160ms ease, filter 160ms ease',
-                                                            }}
-                                                            onMouseEnter={(e) => {
-                                                                e.currentTarget.style.transform = 'translateY(-1px)';
-                                                                e.currentTarget.style.boxShadow = '0 14px 24px rgba(244,63,94,0.18)';
-                                                            }}
-                                                            onMouseLeave={(e) => {
-                                                                e.currentTarget.style.transform = 'translateY(0)';
-                                                                e.currentTarget.style.boxShadow = '0 10px 18px rgba(244,63,94,0.12)';
-                                                            }}
-                                                        >
-                                                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ width: 18, height: 18 }}>
-                                                                <path d="M5 7h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                                                                <path d="M9 7V5.8A1.8 1.8 0 0 1 10.8 4h2.4A1.8 1.8 0 0 1 15 5.8V7" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-                                                                <path d="M8 7l.7 12.2A1.8 1.8 0 0 0 10.5 21h3a1.8 1.8 0 0 0 1.8-1.8L16 7" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-                                                                <path d="M10 11v5M14 11v5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                                                            </svg>
-                                                        </button>
-                                                    </div>
-                                                ) : (
-                                                    <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: 13 }}>Đang xử lý...</span>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            {isOrderViewOpen && viewOrder && (
-                <div className="modal-overlay-fade" style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.68)', backdropFilter: 'blur(8px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: 20 }}>
-                    <div className="modal-panel-fade" style={{ width: 'min(760px, 100%)', borderRadius: 28, overflow: 'hidden', background: 'linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,250,252,0.98))', border: '1px solid rgba(59,130,246,0.16)', boxShadow: '0 30px 90px rgba(15,23,42,0.32)', transformOrigin: 'center' }}>
-                        <div style={{ padding: 22, background: 'linear-gradient(180deg, #ffffff, #f8fafc)', color: '#0f172a', borderBottom: '1px solid #e2e8f0' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
-                                <div>
-                                    <div style={{ display: 'inline-flex', alignItems: 'center', padding: '7px 12px', borderRadius: 999, background: '#dbeafe', color: '#1d4ed8', fontWeight: 800, fontSize: 12, marginBottom: 14, letterSpacing: '0.02em' }}>
-                                        ĐƠN HÀNG ĐÃ HOÀN TẤT
-                                    </div>
-                                    <h3 style={{ margin: '0 0 8px', fontSize: 26, lineHeight: 1.2, letterSpacing: '-0.03em' }}>Chi tiết đơn {viewOrder.order_no}</h3>
-                                    <p style={{ margin: 0, color: '#64748b', lineHeight: 1.7 }}>Tổng hợp thông tin đơn hàng trong một khung nhìn gọn gàng và hiện đại.</p>
-                                </div>
-                                <button type="button" onClick={closeViewModal} aria-label="Đóng popup" style={{ width: 42, height: 42, borderRadius: 14, border: '1px solid #cbd5e1', background: '#fff', color: '#0f172a', cursor: 'pointer', fontWeight: 800, fontSize: 18 }}>×</button>
+            {/* ── View Modal ── */}
+            {isViewOpen && viewOrder && createPortal(
+                <div
+                    style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.65)', backdropFilter: 'blur(8px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: pad }}
+                    onClick={() => { setIsViewOpen(false); setViewOrder(null); }}
+                >
+                    <div style={{ width: '100%', maxWidth: 700, background: '#fff', borderRadius: cardR, boxShadow: '0 30px 90px rgba(15,23,42,0.3)', border: '1px solid rgba(59,130,246,0.16)', overflow: 'hidden' }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div style={{ padding: isMobile ? '16px' : 22, background: 'linear-gradient(180deg, #fff, #f8fafc)', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                            <div>
+                                <div style={{ display: 'inline-flex', alignItems: 'center', padding: '5px 10px', borderRadius: 999, background: '#dcfce7', color: '#166534', fontWeight: 800, fontSize: 11, marginBottom: 10 }}>ĐƠN HÀNG ĐÃ HOÀN TẤT</div>
+                                <h3 style={{ margin: 0, fontSize: isMobile ? 18 : 24, fontWeight: 900, color: '#0f172a', letterSpacing: '-0.02em' }}>Chi tiết đơn {viewOrder.order_no}</h3>
                             </div>
+                            <button onClick={() => { setIsViewOpen(false); setViewOrder(null); }} style={{ width: 36, height: 36, borderRadius: 10, borderWidth: '1px', borderStyle: 'solid', borderColor: '#cbd5e1', background: '#fff', cursor: 'pointer', fontSize: 18, fontWeight: 700, display: 'grid', placeItems: 'center', flexShrink: 0 }}>×</button>
                         </div>
-
-                        <div style={{ padding: 22 }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 14, marginBottom: 18 }}>
-                                <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 18, padding: 16, boxShadow: '0 10px 24px rgba(15,23,42,0.04)' }}>
-                                    <div style={{ fontSize: 12, color: '#64748b', fontWeight: 700, marginBottom: 8 }}>Khách hàng</div>
-                                    <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a' }}>{viewOrder.customer_name || '---'}</div>
+                        <div style={{ padding: isMobile ? '14px' : 22 }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, minmax(0, 1fr))', gap: 12, marginBottom: 14 }}>
+                                <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: 14 }}>
+                                    <div style={{ fontSize: 11, color: '#64748b', fontWeight: 700, marginBottom: 4, textTransform: 'uppercase' }}>Khách hàng</div>
+                                    <div style={{ fontSize: 14, fontWeight: 800, color: '#0f172a' }}>{viewOrder.customer_name || '—'}</div>
                                 </div>
-                                <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 18, padding: 16, boxShadow: '0 10px 24px rgba(15,23,42,0.04)' }}>
-                                    <div style={{ fontSize: 12, color: '#64748b', fontWeight: 700, marginBottom: 8 }}>Ngày giao dự kiến</div>
-                                    <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a' }}>{viewOrder.expected_delivery_date ? new Date(viewOrder.expected_delivery_date).toLocaleDateString('vi-VN') : '---'}</div>
+                                <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: 14 }}>
+                                    <div style={{ fontSize: 11, color: '#64748b', fontWeight: 700, marginBottom: 4, textTransform: 'uppercase' }}>Ngày giao dự kiến</div>
+                                    <div style={{ fontSize: 14, fontWeight: 800, color: '#0f172a' }}>{viewOrder.expected_delivery_date ? new Date(viewOrder.expected_delivery_date).toLocaleDateString('vi-VN') : '—'}</div>
                                 </div>
-                                <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 18, padding: 16, boxShadow: '0 10px 24px rgba(15,23,42,0.04)' }}>
-                                    <div style={{ fontSize: 12, color: '#64748b', fontWeight: 700, marginBottom: 8 }}>Trạng thái</div>
-                                    <span style={{ display: 'inline-flex', alignItems: 'center', padding: '8px 12px', borderRadius: 999, background: '#dcfce7', color: '#166534', fontWeight: 800, fontSize: 12 }}>{statusConfig.completed.label}</span>
-                                </div>
-                                <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 18, padding: 16, boxShadow: '0 10px 24px rgba(15,23,42,0.04)' }}>
-                                    <div style={{ fontSize: 12, color: '#64748b', fontWeight: 700, marginBottom: 8 }}>Địa chỉ giao | Thông tin giao hàng</div>
-                                    <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', lineHeight: 1.5 }}>{viewOrder.note || 'Không có ghi chú.'}</div>
-                                </div>
-                                <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 18, padding: 16, boxShadow: '0 10px 24px rgba(15,23,42,0.04)', gridColumn: '1 / -1' }}>
-                                    <div style={{ fontSize: 12, color: '#1d4ed8', fontWeight: 700, marginBottom: 8 }}>Tổng tiền</div>
-                                    <div style={{ fontSize: 22, fontWeight: 900, color: '#1d4ed8' }}>{formatCurrency(calculateOrderTotal(viewOrder))} đ</div>
+                                <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 14, padding: 14, gridColumn: isMobile ? 'unset' : '1 / -1' }}>
+                                    <div style={{ fontSize: 11, color: '#1d4ed8', fontWeight: 700, marginBottom: 4, textTransform: 'uppercase' }}>Tổng tiền</div>
+                                    <div style={{ fontSize: isMobile ? 18 : 22, fontWeight: 900, color: '#1d4ed8' }}>{fmt(calcTotal(viewOrder))} đ</div>
                                 </div>
                             </div>
-
-                            <div style={{ display: 'grid', gap: 14 }}>
-                                <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 18, padding: 16, boxShadow: '0 10px 24px rgba(15,23,42,0.04)' }}>
-                                    <div style={{ fontSize: 12, color: '#64748b', fontWeight: 700, marginBottom: 10 }}>Danh sách sản phẩm</div>
-                                    <div style={{ color: '#0f172a', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>{formatOrderItems(viewOrder)}</div>
-                                </div>
-
-                                <div style={{ background: 'linear-gradient(180deg, #eff6ff, #dbeafe)', border: '1px solid #bfdbfe', borderRadius: 18, padding: 16 }}>
-                                    <div style={{ fontSize: 12, color: '#1d4ed8', fontWeight: 700, marginBottom: 8 }}>Ghi chú</div>
-                                    <div style={{ color: '#1e3a8a', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{viewOrder.note || 'Không có ghi chú.'}</div>
-                                </div>
+                            <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: 14, marginBottom: 14 }}>
+                                <div style={{ fontSize: 11, color: '#64748b', fontWeight: 700, marginBottom: 8, textTransform: 'uppercase' }}>Danh sách sản phẩm</div>
+                                <div style={{ color: '#0f172a', lineHeight: 1.8 }}>{formatOrderItems(viewOrder)}</div>
                             </div>
-
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 18 }}>
-                                <button onClick={closeViewModal} style={{ padding: '12px 18px', background: 'linear-gradient(135deg, #2563eb, #60a5fa)', color: 'white', border: 'none', borderRadius: 14, cursor: 'pointer', fontWeight: 800, boxShadow: '0 14px 28px rgba(37,99,235,0.18)' }}>
-                                    Đóng
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {isReasonModalOpen && errorOrder && (
-                <div className="modal-overlay-fade" style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.62)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: 20 }}>
-                    <div className="modal-panel-fade" style={{ background: 'white', padding: '28px', borderRadius: 24, width: 'min(560px, 100%)', border: '1px solid rgba(248, 113, 113, 0.25)', boxShadow: '0 30px 80px rgba(15,23,42,0.3)', transformOrigin: 'center' }}>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', padding: '8px 12px', borderRadius: 999, background: '#fee2e2', color: '#b91c1c', fontWeight: 800, fontSize: 12, marginBottom: 16 }}>
-                            ĐƠN BỊ TỪ CHỐI
-                        </div>
-                        <h3 style={{ margin: '0 0 10px', color: '#0f172a', fontSize: 22 }}>Chi tiết lỗi đơn {errorOrder.order_no}</h3>
-                        <p style={{ margin: '0 0 16px', color: '#64748b', lineHeight: 1.7 }}>Xem lý do trả đơn và chọn cách xử lý tiếp theo ngay tại đây.</p>
-                        <div style={{ background: '#fff1f2', padding: '16px', borderRadius: 18, marginBottom: 20, border: '1px solid #fecdd3', maxHeight: 240, overflowY: 'auto' }}>
-                            <p style={{ margin: 0, whiteSpace: 'pre-wrap', color: '#9f1239', lineHeight: 1.7 }}>{errorOrder.note || 'Không có ghi chú lỗi.'}</p>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-                            <button onClick={() => setIsReasonModalOpen(false)} style={{ padding: '12px 16px', background: '#e2e8f0', color: '#0f172a', border: 'none', borderRadius: 14, cursor: 'pointer', fontWeight: 700 }}>
-                                Đóng
-                            </button>
-                            {errorOrder.status === 'returned' && errorOrder.note?.includes('[KHÁCH BOM HÀNG') ? (
-                                <button onClick={() => handleCancelOrder(errorOrder)} style={{ padding: '12px 16px', background: 'linear-gradient(135deg, #16a34a, #22c55e)', color: 'white', border: 'none', borderRadius: 14, cursor: 'pointer', fontWeight: 800, boxShadow: '0 12px 24px rgba(22,163,74,0.18)' }}>
-                                    Xác nhận Hoàn Kho & Hủy Đơn
-                                </button>
-                            ) : (
-                                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                                    <button onClick={() => handleDelete(errorOrder)} style={{ padding: '12px 16px', background: '#fff', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 14, cursor: 'pointer', fontWeight: 800 }}>
-                                        Xóa vĩnh viễn
-                                    </button>
-                                    <button onClick={() => handleEditClick(errorOrder)} style={{ padding: '12px 16px', background: 'linear-gradient(135deg, #ea580c, #f97316)', color: 'white', border: 'none', borderRadius: 14, cursor: 'pointer', fontWeight: 800 }}>
-                                        Sửa & Gửi lại
-                                    </button>
+                            {viewOrder.note && (
+                                <div style={{ background: 'linear-gradient(180deg, #eff6ff, #dbeafe)', border: '1px solid #bfdbfe', borderRadius: 14, padding: 14, marginBottom: 14 }}>
+                                    <div style={{ fontSize: 11, color: '#1d4ed8', fontWeight: 700, marginBottom: 6, textTransform: 'uppercase' }}>Ghi chú</div>
+                                    <div style={{ color: '#1e3a8a', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{viewOrder.note}</div>
                                 </div>
                             )}
+                            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                <button onClick={() => { setIsViewOpen(false); setViewOrder(null); }} style={{ padding: '11px 18px', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg, #2563eb, #60a5fa)', color: '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer', boxShadow: '0 14px 28px rgba(37,99,235,0.18)' }}>Đóng</button>
+                            </div>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
-            {cancelReasonOrder && (
-                <div className="modal-overlay-fade" style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.68)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: 20 }}>
-                    <div className="modal-panel-fade" style={{ width: 'min(760px, 100%)', borderRadius: 28, overflow: 'hidden', background: 'linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,250,252,0.98))', border: '1px solid rgba(244,63,94,0.16)', boxShadow: '0 30px 90px rgba(15,23,42,0.32)', transformOrigin: 'center' }}>
-                        <div style={{ padding: 22, background: 'linear-gradient(180deg, #fff1f2, #ffffff)', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+            {/* ── Error Modal (returned) ── */}
+            {isErrorModalOpen && errorOrder && createPortal(
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(8px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: pad }}
+                    onClick={() => { setIsErrorModalOpen(false); setErrorOrder(null); }}
+                >
+                    <div style={{ width: '100%', maxWidth: 540, background: '#fff', borderRadius: cardR, boxShadow: '0 30px 80px rgba(15,23,42,0.3)', border: '1px solid rgba(248,113,113,0.25)', overflow: 'hidden' }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div style={{ padding: isMobile ? '14px' : 20, background: 'linear-gradient(180deg, #fff1f2, #fff)', borderBottom: '1px solid #fecdd3', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
                             <div>
-                                <div style={{ display: 'inline-flex', alignItems: 'center', padding: '7px 12px', borderRadius: 999, background: '#fee2e2', color: '#b91c1c', fontWeight: 800, fontSize: 12, marginBottom: 14 }}>
-                                    ĐƠN ĐÃ HỦY
-                                </div>
-                                <h3 style={{ margin: '0 0 8px', fontSize: 26, lineHeight: 1.2, letterSpacing: '-0.03em', color: '#0f172a' }}>Lý do hủy đơn {cancelReasonOrder.order_no}</h3>
-                                <p style={{ margin: 0, color: '#64748b', lineHeight: 1.7 }}>Xem chi tiết vì sao đơn này bị hủy và thông tin đi kèm.</p>
+                                <div style={{ display: 'inline-flex', alignItems: 'center', padding: '5px 10px', borderRadius: 999, background: '#fee2e2', color: '#b91c1c', fontWeight: 800, fontSize: 11, marginBottom: 8 }}>ĐƠN BỊ TỪ CHỐI</div>
+                                <h3 style={{ margin: 0, fontSize: isMobile ? 16 : 20, fontWeight: 900, color: '#0f172a' }}>Chi tiết lỗi đơn {errorOrder.order_no}</h3>
                             </div>
-                            <button type="button" onClick={closeCancelReason} aria-label="Đóng popup" style={{ width: 42, height: 42, borderRadius: 14, border: '1px solid #cbd5e1', background: '#fff', color: '#0f172a', cursor: 'pointer', fontWeight: 800, fontSize: 18 }}>×</button>
+                            <button onClick={() => { setIsErrorModalOpen(false); setErrorOrder(null); }} style={{ width: 36, height: 36, borderRadius: 10, borderWidth: '1px', borderStyle: 'solid', borderColor: '#cbd5e1', background: '#fff', cursor: 'pointer', fontSize: 18, fontWeight: 700, display: 'grid', placeItems: 'center' }}>×</button>
                         </div>
+                        <div style={{ padding: isMobile ? '14px' : 20 }}>
+                            <div style={{ background: '#fff1f2', padding: '14px', borderRadius: 14, marginBottom: 16, border: '1px solid #fecdd3', maxHeight: 200, overflowY: 'auto' }}>
+                                <div style={{ fontSize: 11, color: '#be123c', fontWeight: 700, textTransform: 'uppercase', marginBottom: 6 }}>Lý do trả đơn</div>
+                                <p style={{ margin: 0, whiteSpace: 'pre-wrap', color: '#9f1239', lineHeight: 1.7, fontSize: 14 }}>{errorOrder.note || 'Không có ghi chú lỗi.'}</p>
+                            </div>
+                            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                                <button onClick={() => { setIsErrorModalOpen(false); setErrorOrder(null); }} style={{ padding: '10px 16px', borderRadius: 12, borderWidth: '1px', borderStyle: 'solid', borderColor: '#cbd5e1', background: '#fff', color: '#334155', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Đóng</button>
+                                {errorOrder.status === 'returned' && errorOrder.note?.includes('[KHÁCH BOM HÀNG') && (
+                                    <button onClick={() => handleCancel(errorOrder)} style={{ padding: '10px 16px', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg, #16a34a, #22c55e)', color: '#fff', fontWeight: 800, fontSize: 13, cursor: 'pointer', boxShadow: '0 12px 24px rgba(22,163,74,0.18)' }}>Hoàn Kho & Hủy Đơn</button>
+                                )}
+                                {!(errorOrder.status === 'returned' && errorOrder.note?.includes('[KHÁCH BOM HÀNG')) && (
+                                    <>
+                                        <button onClick={() => handleDelete(errorOrder)} style={{ padding: '10px 16px', borderRadius: 12, borderWidth: '1px', borderStyle: 'solid', borderColor: '#fecaca', background: '#fff1f2', color: '#dc2626', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>Xóa vĩnh viễn</button>
+                                        <button onClick={() => { setIsErrorModalOpen(false); setErrorOrder(null); openEdit(errorOrder); }} style={{ padding: '10px 16px', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg, #ea580c, #f97316)', color: '#fff', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>Sửa & Gửi lại</button>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
 
-                        <div style={{ padding: 22, display: 'grid', gap: 14 }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 14 }}>
-                                <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 18, padding: 16 }}>
-                                    <div style={{ fontSize: 12, color: '#64748b', fontWeight: 700, marginBottom: 8 }}>Khách hàng</div>
-                                    <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a' }}>{cancelReasonOrder.customer_name || '---'}</div>
+            {/* ── Cancel Modal ── */}
+            {cancelOrder && createPortal(
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.65)', backdropFilter: 'blur(8px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: pad }}
+                    onClick={() => setCancelOrder(null)}
+                >
+                    <div style={{ width: '100%', maxWidth: 640, background: '#fff', borderRadius: cardR, boxShadow: '0 30px 90px rgba(15,23,42,0.3)', border: '1px solid rgba(244,63,94,0.16)', overflow: 'hidden' }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div style={{ padding: isMobile ? '14px' : 20, background: 'linear-gradient(180deg, #fff1f2, #fff)', borderBottom: '1px solid #fecdd3', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                            <div>
+                                <div style={{ display: 'inline-flex', alignItems: 'center', padding: '5px 10px', borderRadius: 999, background: '#fee2e2', color: '#b91c1c', fontWeight: 800, fontSize: 11, marginBottom: 8 }}>ĐƠN ĐÃ HỦY</div>
+                                <h3 style={{ margin: 0, fontSize: isMobile ? 16 : 22, fontWeight: 900, color: '#0f172a', letterSpacing: '-0.02em' }}>Lý do hủy đơn {cancelOrder.order_no}</h3>
+                            </div>
+                            <button onClick={() => setCancelOrder(null)} style={{ width: 36, height: 36, borderRadius: 10, borderWidth: '1px', borderStyle: 'solid', borderColor: '#cbd5e1', background: '#fff', cursor: 'pointer', fontSize: 18, fontWeight: 700, display: 'grid', placeItems: 'center' }}>×</button>
+                        </div>
+                        <div style={{ padding: isMobile ? '14px' : 20 }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, minmax(0, 1fr))', gap: 12, marginBottom: 14 }}>
+                                <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: 14 }}>
+                                    <div style={{ fontSize: 11, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Khách hàng</div>
+                                    <div style={{ fontSize: 14, fontWeight: 800, color: '#0f172a' }}>{cancelOrder.customer_name || '—'}</div>
                                 </div>
-                                <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 18, padding: 16 }}>
-                                    <div style={{ fontSize: 12, color: '#64748b', fontWeight: 700, marginBottom: 8 }}>Trạng thái</div>
-                                    <span style={{ display: 'inline-flex', alignItems: 'center', padding: '8px 12px', borderRadius: 999, background: '#fee2e2', color: '#991b1b', fontWeight: 800, fontSize: 12 }}>{statusConfig.canceled.label}</span>
+                                <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: 14 }}>
+                                    <div style={{ fontSize: 11, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Ngày hủy</div>
+                                    <div style={{ fontSize: 14, fontWeight: 800, color: '#0f172a' }}>
+                                        {cancelOrder.updated_at ? new Date(cancelOrder.updated_at).toLocaleDateString('vi-VN') :
+                                         cancelOrder.created_at ? new Date(cancelOrder.created_at).toLocaleDateString('vi-VN') : '—'}
+                                    </div>
                                 </div>
-                                <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 18, padding: 16 }}>
-                                    <div style={{ fontSize: 12, color: '#64748b', fontWeight: 700, marginBottom: 8 }}>Ngày hủy</div>
-                                    <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a' }}>{cancelReasonOrder.updated_at ? new Date(cancelReasonOrder.updated_at).toLocaleDateString('vi-VN') : cancelReasonOrder.created_at ? new Date(cancelReasonOrder.created_at).toLocaleDateString('vi-VN') : '---'}</div>
-                                </div>
-                                <div style={{ gridColumn: '1 / -1', background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 18, padding: 16 }}>
-                                    <div style={{ fontSize: 12, color: '#be123c', fontWeight: 700, marginBottom: 8 }}>Lý do hủy</div>
-                                    <div style={{ color: '#9f1239', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>{cancelReasonOrder.note || 'Không có ghi chú hủy.'}</div>
+                                <div style={{ gridColumn: '1 / -1', background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 14, padding: 14 }}>
+                                    <div style={{ fontSize: 11, color: '#be123c', fontWeight: 700, textTransform: 'uppercase', marginBottom: 6 }}>Lý do hủy</div>
+                                    <div style={{ color: '#9f1239', lineHeight: 1.7, whiteSpace: 'pre-wrap', fontSize: 14 }}>{cancelOrder.note || 'Không có ghi chú hủy.'}</div>
                                 </div>
                             </div>
-
-                            <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 18, padding: 16 }}>
-                                <div style={{ fontSize: 12, color: '#64748b', fontWeight: 700, marginBottom: 10 }}>Sản phẩm</div>
-                                <div style={{ color: '#0f172a', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>{formatOrderItems(cancelReasonOrder)}</div>
+                            <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: 14, marginBottom: 14 }}>
+                                <div style={{ fontSize: 11, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', marginBottom: 8 }}>Sản phẩm</div>
+                                <div style={{ color: '#0f172a', lineHeight: 1.8 }}>{formatOrderItems(cancelOrder)}</div>
                             </div>
-
                             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                                <button onClick={closeCancelReason} style={{ padding: '12px 18px', background: 'linear-gradient(135deg, #be123c, #f43f5e)', color: 'white', border: 'none', borderRadius: 14, cursor: 'pointer', fontWeight: 800, boxShadow: '0 14px 28px rgba(244,63,94,0.18)' }}>
-                                    Đóng
+                                <button onClick={() => setCancelOrder(null)} style={{ padding: '11px 18px', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg, #be123c, #f43f5e)', color: '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer', boxShadow: '0 14px 28px rgba(244,63,94,0.18)' }}>Đóng</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
+
+            {/* ── Customer Rejection Modal ── */}
+            {isRejectModalOpen && rejectOrder && createPortal(
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(8px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: pad }}
+                    onClick={() => { setIsRejectModalOpen(false); setRejectOrder(null); }}
+                >
+                    <div style={{ width: '100%', maxWidth: 540, background: '#fff', borderRadius: cardR, boxShadow: '0 30px 80px rgba(15,23,42,0.3)', border: '1px solid rgba(249,115,22,0.2)', overflow: 'hidden' }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div style={{ padding: isMobile ? '14px' : 20, background: 'linear-gradient(180deg, #fff7ed, #fff)', borderBottom: '1px solid #fed7aa', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                            <div>
+                                <div style={{ display: 'inline-flex', alignItems: 'center', padding: '5px 10px', borderRadius: 999, background: '#ffedd5', color: '#c2410c', fontWeight: 800, fontSize: 11, marginBottom: 8 }}>KHÁCH TỪ CHỐI NHẬN</div>
+                                <h3 style={{ margin: 0, fontSize: isMobile ? 16 : 20, fontWeight: 900, color: '#0f172a' }}>Xử lý đơn {rejectOrder.order_no}</h3>
+                            </div>
+                            <button onClick={() => { setIsRejectModalOpen(false); setRejectOrder(null); }} style={{ width: 36, height: 36, borderRadius: 10, borderWidth: '1px', borderStyle: 'solid', borderColor: '#cbd5e1', background: '#fff', cursor: 'pointer', fontSize: 18, fontWeight: 700, display: 'grid', placeItems: 'center' }}>×</button>
+                        </div>
+                        <div style={{ padding: isMobile ? '14px' : 20 }}>
+                            {rejectOrder.note && (
+                                <div style={{ background: '#fff7ed', padding: '14px', borderRadius: 14, marginBottom: 16, border: '1px solid #fed7aa', maxHeight: 160, overflowY: 'auto' }}>
+                                    <div style={{ fontSize: 11, color: '#c2410c', fontWeight: 700, textTransform: 'uppercase', marginBottom: 6 }}>Lý do khách từ chối</div>
+                                    <p style={{ margin: 0, whiteSpace: 'pre-wrap', color: '#9a3412', lineHeight: 1.7, fontSize: 14 }}>{rejectOrder.note}</p>
+                                </div>
+                            )}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+                                <button onClick={() => setRejectAction('return_to_warehouse')} style={{
+                                    padding: '16px 14px', borderRadius: 14, border: `2px solid ${rejectAction === 'return_to_warehouse' ? '#16a34a' : '#e2e8f0'}`,
+                                    background: rejectAction === 'return_to_warehouse' ? '#f0fdf4' : '#fff', cursor: 'pointer', textAlign: 'center', transition: 'all 0.2s',
+                                }}>
+                                    <i className="ri-arrow-go-back-line" style={{ fontSize: 24, color: rejectAction === 'return_to_warehouse' ? '#15803d' : '#94a3b8', display: 'block', margin: '0 auto 8px' }} />
+                                    <div style={{ fontWeight: 900, color: rejectAction === 'return_to_warehouse' ? '#15803d' : '#64748b', fontSize: 13 }}>Hoàn đơn lại vào kho</div>
+                                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>Cộng tồn kho đã xuất, hủy đơn</div>
+                                </button>
+                                <button onClick={() => setRejectAction('return_pending')} style={{
+                                    padding: '16px 14px', borderRadius: 14, border: `2px solid ${rejectAction === 'return_pending' ? '#ea580c' : '#e2e8f0'}`,
+                                    background: rejectAction === 'return_pending' ? '#fff7ed' : '#fff', cursor: 'pointer', textAlign: 'center', transition: 'all 0.2s',
+                                }}>
+                                    <i className="ri-truck-line" style={{ fontSize: 24, color: rejectAction === 'return_pending' ? '#c2410c' : '#94a3b8', display: 'block', margin: '0 auto 8px' }} />
+                                    <div style={{ fontWeight: 900, color: rejectAction === 'return_pending' ? '#c2410c' : '#64748b', fontSize: 13 }}>Chuyển xử lý hoàn</div>
+                                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>Đòi bồi thường vận chuyển</div>
+                                </button>
+                            </div>
+                            <div style={{ marginBottom: 16 }}>
+                                <label style={{ display: 'block', fontWeight: 800, fontSize: 13, color: '#374151', marginBottom: 8 }}>Ghi chú (tùy chọn)</label>
+                                <textarea rows="3" value={rejectNote} onChange={(e) => setRejectNote(e.target.value)}
+                                    placeholder="Nhập ghi chú thêm..."
+                                    style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid #e2e8f0', fontSize: 14, resize: 'vertical', boxSizing: 'border-box', outline: 'none', fontFamily: 'inherit' }}
+                                />
+                            </div>
+                            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                                <button onClick={() => { setIsRejectModalOpen(false); setRejectOrder(null); }} style={{ padding: '10px 16px', borderRadius: 12, borderWidth: '1px', borderStyle: 'solid', borderColor: '#e2e8f0', background: '#fff', color: '#374151', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Đóng</button>
+                                <button onClick={handleReject} style={{ padding: '10px 18px', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg, #ea580c, #f97316)', color: '#fff', fontWeight: 800, fontSize: 13, cursor: 'pointer', boxShadow: '0 12px 24px rgba(234,88,12,0.18)' }}>
+                                    {rejectAction === 'return_to_warehouse' ? 'Hoàn đơn lại vào kho' : 'Chuyển xử lý hoàn'}
                                 </button>
                             </div>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
-
     );
 }

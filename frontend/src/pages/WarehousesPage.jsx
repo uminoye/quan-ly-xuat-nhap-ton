@@ -49,9 +49,20 @@ const IconAlertTriangle = () => (
     <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/>
   </svg>
 );
+const IconDownload = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>
+  </svg>
+);
+const IconWarning = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/>
+  </svg>
+);
 
 // ---- Formatted number ----
 const fmtVND = (v) => new Intl.NumberFormat('vi-VN').format(Number(v || 0));
+const fmtDate = (d) => d ? new Date(d).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
 
 // ---- Status badge ----
 const StockBadge = ({ status }) => {
@@ -71,6 +82,25 @@ const StockBadge = ({ status }) => {
       {status === 'in-stock' && <span style={{ width: 6, height: 6, borderRadius: '50%', background: colors.success, display: 'inline-block' }} />}
       {status === 'low-stock' && <span style={{ width: 6, height: 6, borderRadius: '50%', background: colors.warning, display: 'inline-block' }} />}
       {status === 'out-stock' && <span style={{ width: 6, height: 6, borderRadius: '50%', background: colors.danger, display: 'inline-block' }} />}
+      {s.label}
+    </span>
+  );
+};
+
+// ---- Defect type badge ----
+const DefectBadge = ({ type }) => {
+  const map = {
+    'loi_van_tai': { label: 'Lỗi vận chuyển', bg: '#fff3e0', color: '#e65100', border: '#ffb74d' },
+    'loi_nha_may': { label: 'Lỗi nhà máy', bg: '#fce4ec', color: '#c62828', border: '#ef9a9a' },
+  };
+  const s = map[type] || { label: type, bg: '#f5f5f5', color: '#757575', border: '#bdbdbd' };
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+      padding: '3px 8px', borderRadius: radius.full,
+      fontSize: 11, fontWeight: 700, border: `1px solid ${s.border}`,
+      background: s.bg, color: s.color,
+    }}>
       {s.label}
     </span>
   );
@@ -189,15 +219,19 @@ const FormSelect = ({ style: extraStyle, children, ...props }) => (
 
 // ============================================================
 
-export default function ProductsPage() {
+export default function WarehousesPage() {
   const location = useLocation();
   const [products, setProducts] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
+  const [defectiveOrders, setDefectiveOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [viewFilter, setViewFilter] = useState('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isWHModalOpen, setIsWHModalOpen] = useState(false);
   const [deleteConfirmProduct, setDeleteConfirmProduct] = useState(null);
+  const [activeTab, setActiveTab] = useState('inventory'); // 'inventory' | 'defective'
+  const [defectiveSearch, setDefectiveSearch] = useState('');
+  const [defectiveFilterType, setDefectiveFilterType] = useState('all');
   const skuInputRef = useRef(null);
 
   // Form state
@@ -231,9 +265,14 @@ export default function ProductsPage() {
   // ---- Fetch data ----
   const fetchData = async () => {
     try {
-      const [pRes, wRes] = await Promise.all([api.get('/products'), api.get('/warehouses/for-outbound')]);
+      const [pRes, wRes, dRes] = await Promise.all([
+        api.get('/products'),
+        api.get('/warehouses'),
+        api.get('/warehouses/defective-orders'),
+      ]);
       setProducts(pRes.data);
       setWarehouses(wRes.data);
+      setDefectiveOrders(dRes.data);
     } catch (error) {
       console.error('Lỗi tải dữ liệu:', error);
     } finally {
@@ -309,6 +348,16 @@ export default function ProductsPage() {
     const matchesSearch = !search ||
       [item.name, item.sku, item.category].some(v => String(v || '').toLowerCase().includes(search));
     return matchesStatus && matchesSearch;
+  });
+
+  // ---- Defective orders filtering ----
+  const filteredDefectiveOrders = defectiveOrders.filter(item => {
+    const search = defectiveSearch.trim().toLowerCase();
+    const matchesSearch = !search ||
+      String(item.order_no || '').toLowerCase().includes(search) ||
+      String(item.customer_name || '').toLowerCase().includes(search);
+    const matchesType = defectiveFilterType === 'all' || item.logistics_action === defectiveFilterType;
+    return matchesSearch && matchesType;
   });
 
   // ---- Actions ----
@@ -398,6 +447,45 @@ export default function ProductsPage() {
     }
   };
 
+  // ---- Excel Export for Defective Orders ----
+  const handleExportDefective = () => {
+    const headers = ['Mã đơn', 'Khách hàng', 'Loại lỗi', 'Ngày tạo', 'Kho gốc', 'Sản phẩm', 'Số lượng', 'Đơn giá', 'Thành tiền'];
+    const rows = filteredDefectiveOrders.map(item => {
+      const items = item.order_items || [];
+      const productLines = items.map(i =>
+        `${i.product_name || ''} (${i.sku || ''}) x${i.quantity}`
+      ).join('; ');
+      const total = items.reduce((sum, i) => sum + (Number(i.quantity) * Number(i.unit_price || 0)), 0);
+      return [
+        item.order_no || '',
+        item.customer_name || '',
+        item.logistics_action === 'loi_van_tai' ? 'Lỗi vận chuyển' : 'Lỗi nhà máy',
+        fmtDate(item.created_at),
+        item.warehouse_name || '—',
+        productLines,
+        items.reduce((sum, i) => sum + Number(i.quantity || 0), 0),
+        fmtVND(total),
+        fmtVND(total),
+      ];
+    });
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
+
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `KhoLoi_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const isFiltered = viewFilter !== 'all' || filterMode !== 'all' || searchText.trim();
 
   return (
@@ -434,11 +522,11 @@ export default function ProductsPage() {
       <div style={{ maxWidth: 1440, margin: '0 auto' }} className="prod-wrap">
 
         {/* ---- PAGE HEADER ---- */}
-          <div style={{
-            display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end',
-            flexWrap: 'wrap', gap: 16, marginBottom: 24,
-            animation: 'fadeUp 400ms ease both',
-          }} className="prod-header">
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end',
+          flexWrap: 'wrap', gap: 16, marginBottom: 24,
+          animation: 'fadeUp 400ms ease both',
+        }} className="prod-header">
           <div>
             <div style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -450,10 +538,12 @@ export default function ProductsPage() {
               Quản lý
             </div>
             <h1 className="prod-page-title" style={{ margin: 0, fontSize: 30, fontWeight: 900, color: colors.text, letterSpacing: '-0.03em' }}>
-              Sản phẩm
+              Quản lý Kho
             </h1>
             <p style={{ margin: '6px 0 0', color: colors.textMuted, fontSize: 14 }}>
-              {loading ? 'Đang tải...' : `${filteredProducts.length} / ${products.length} sản phẩm`}
+              {loading ? 'Đang tải...' : activeTab === 'inventory'
+                ? `${filteredProducts.length} / ${products.length} sản phẩm`
+                : `${filteredDefectiveOrders.length} đơn lỗi`}
             </p>
           </div>
 
@@ -478,6 +568,53 @@ export default function ProductsPage() {
           </div>
         </div>
 
+        {/* ---- TAB SWITCHER ---- */}
+        <div style={{
+          display: 'flex', gap: 4, marginBottom: 20,
+          background: colors.backgroundAlt, padding: 4,
+          borderRadius: radius.lg, width: 'fit-content',
+          animation: 'fadeUp 400ms ease 40ms both',
+        }}>
+          {[
+            { key: 'inventory', label: 'Tồn kho', icon: <IconPackage /> },
+            { key: 'defective', label: 'Kho lỗi', icon: <IconWarning />, count: defectiveOrders.length },
+          ].map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 7,
+                padding: '8px 18px',
+                borderRadius: radius.md,
+                border: 'none',
+                background: activeTab === tab.key ? colors.white : 'transparent',
+                color: activeTab === tab.key ? colors.primary : colors.textSecondary,
+                fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                boxShadow: activeTab === tab.key ? shadows.sm : 'none',
+                transition: 'all 200ms ease',
+              }}
+            >
+              {tab.icon}
+              {tab.label}
+              {tab.count > 0 && (
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  minWidth: 20, height: 20, padding: '0 6px',
+                  borderRadius: radius.full,
+                  background: activeTab === tab.key ? colors.primarySoft : colors.dangerSoft,
+                  color: activeTab === tab.key ? colors.primary : colors.danger,
+                  fontSize: 11, fontWeight: 800,
+                }}>
+                  {tab.count}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* =================== TAB: TỒN KHO =================== */}
+        {activeTab === 'inventory' && (
+          <>
         {/* ---- FILTER BAR ---- */}
         <div style={{
           ...card({ marginBottom: 20, padding: '16px 20px' }),
@@ -547,7 +684,7 @@ export default function ProductsPage() {
               style={{ height: 44 }}
             >
               <option value="all">Tất cả kho</option>
-              {warehouses.map(w => (
+              {warehouses.filter(w => w.warehouse_code !== 'KHO-LOI').map(w => (
                 <option key={w.id} value={w.id}>{w.name}</option>
               ))}
             </FormSelect>
@@ -699,7 +836,7 @@ export default function ProductsPage() {
                         background: colors.warningSoft, border: `1px solid ${colors.warningBorder}`,
                         fontSize: 11, color: colors.warning, fontWeight: 600,
                       }}>
-                        ⚠ {warehouseSummary}
+                        <IconWarning /> {warehouseSummary}
                       </div>
                     )}
 
@@ -764,6 +901,205 @@ export default function ProductsPage() {
                 </div>
               );
             })}
+          </div>
+        )}
+          </>
+        )}
+
+        {/* =================== TAB: KHO LỖI =================== */}
+        {activeTab === 'defective' && (
+          <div style={{ animation: 'fadeUp 400ms ease both' }}>
+            {/* Filter bar for defective */}
+            <div style={{
+              ...card({ marginBottom: 20, padding: '16px 20px' }),
+            }}>
+              <div style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                gap: 12, flexWrap: 'wrap',
+              }}>
+                <div style={{
+                  display: 'flex', gap: 8, flexWrap: 'wrap', flex: 1,
+                }}>
+                  {/* Search */}
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '0 14px',
+                    border: `1.5px solid ${colors.border}`,
+                    borderRadius: radius.md, background: colors.backgroundAlt,
+                    height: 40, minWidth: 220, flex: 1,
+                    transition: 'border-color 200ms',
+                  }}
+                    onFocus={e => e.currentTarget.style.borderColor = colors.primary}
+                    onBlur={e => e.currentTarget.style.borderColor = colors.border}
+                  >
+                    <span style={{ color: colors.textMuted, flexShrink: 0 }}><IconSearch /></span>
+                    <input
+                      placeholder="Tìm mã đơn, khách hàng..."
+                      value={defectiveSearch}
+                      onChange={e => setDefectiveSearch(e.target.value)}
+                      style={{
+                        border: 'none', background: 'transparent', width: '100%',
+                        outline: 'none', color: colors.text, fontSize: 14,
+                      }}
+                    />
+                    {defectiveSearch && (
+                      <button onClick={() => setDefectiveSearch('')} style={{
+                        border: 'none', background: 'none', cursor: 'pointer',
+                        color: colors.textMuted, padding: 0, display: 'flex',
+                      }}>
+                        <IconClose size={14} />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Type filter */}
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {[
+                      { key: 'all', label: 'Tất cả' },
+                      { key: 'loi_van_tai', label: 'Lỗi vận chuyển' },
+                      { key: 'loi_nha_may', label: 'Lỗi nhà máy' },
+                    ].map(f => (
+                      <button key={f.key} onClick={() => setDefectiveFilterType(f.key)} style={{
+                        padding: '7px 14px', borderRadius: radius.md,
+                        border: `1.5px solid ${defectiveFilterType === f.key ? (f.key === 'loi_van_tai' ? '#e65100' : f.key === 'loi_nha_may' ? '#c62828' : colors.primary) : 'transparent'}`,
+                        background: defectiveFilterType === f.key ? (f.key === 'loi_van_tai' ? '#fff3e0' : f.key === 'loi_nha_may' ? '#fce4ec' : colors.primarySoft) : colors.backgroundAlt,
+                        color: defectiveFilterType === f.key ? (f.key === 'loi_van_tai' ? '#e65100' : f.key === 'loi_nha_may' ? '#c62828' : colors.primary) : colors.textMuted,
+                        fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                        transition: 'all 200ms ease',
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Export Excel */}
+                <button
+                  onClick={handleExportDefective}
+                  style={{
+                    ...btn('secondary', 'md'),
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    borderColor: colors.successBorder, color: colors.success,
+                  }}
+                >
+                  <IconDownload /> Xuất Excel
+                </button>
+              </div>
+            </div>
+
+            {/* Defective orders table */}
+            {loading ? (
+              <div style={{ ...card(), textAlign: 'center', padding: 60, color: colors.textMuted }}>
+                <p>Đang tải dữ liệu...</p>
+              </div>
+            ) : filteredDefectiveOrders.length === 0 ? (
+              <div style={{ ...card(), textAlign: 'center', padding: 60 }}>
+                <div style={{ color: colors.textMuted, marginBottom: 12, opacity: 0.4 }}><IconWarning /></div>
+                <p style={{ fontWeight: 700, color: colors.text }}>Chưa có đơn lỗi nào</p>
+                <p style={{ fontSize: 13, color: colors.textMuted, marginTop: 4 }}>
+                  {defectiveSearch || defectiveFilterType !== 'all' ? 'Thử thay đổi bộ lọc.' : 'Các đơn lỗi sẽ xuất hiện tại đây khi có sự cố.'}
+                </p>
+              </div>
+            ) : (
+              <div style={{ ...card({ padding: 0 }), overflow: 'hidden' }}>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ background: colors.backgroundAlt }}>
+                        {[
+                          'Mã đơn', 'Khách hàng', 'Loại lỗi', 'Ngày tạo', 'Kho gốc', 'Sản phẩm', 'Tổng SL', 'Thành tiền', 'Trạng thái'
+                        ].map(h => (
+                          <th key={h} style={{
+                            padding: '12px 16px', textAlign: 'left',
+                            fontWeight: 700, color: colors.textSecondary,
+                            borderBottom: `1.5px solid ${colors.border}`,
+                            whiteSpace: 'nowrap',
+                          }}>
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredDefectiveOrders.map((item, i) => {
+                        const items = item.order_items || [];
+                        const totalQty = items.reduce((s, it) => s + Number(it.quantity || 0), 0);
+                        const totalAmount = items.reduce((s, it) => s + Number(it.quantity || 0) * Number(it.unit_price || 0), 0);
+                        const isEven = i % 2 === 0;
+                        return (
+                          <tr key={item.id} style={{
+                            background: isEven ? colors.white : colors.backgroundAlt,
+                            transition: 'background 150ms',
+                          }}
+                            onMouseEnter={e => e.currentTarget.style.background = colors.primarySoft + '40'}
+                            onMouseLeave={e => e.currentTarget.style.background = isEven ? colors.white : colors.backgroundAlt}
+                          >
+                            <td style={{ padding: '12px 16px', fontFamily: 'monospace', fontWeight: 700, color: colors.primary }}>
+                              {item.order_no || '—'}
+                            </td>
+                            <td style={{ padding: '12px 16px', fontWeight: 600, color: colors.text }}>
+                              {item.customer_name || '—'}
+                            </td>
+                            <td style={{ padding: '12px 16px' }}>
+                              <DefectBadge type={item.logistics_action} />
+                            </td>
+                            <td style={{ padding: '12px 16px', color: colors.textSecondary, whiteSpace: 'nowrap' }}>
+                              {fmtDate(item.created_at)}
+                            </td>
+                            <td style={{ padding: '12px 16px', color: colors.textSecondary }}>
+                              {item.warehouse_name || '—'}
+                            </td>
+                            <td style={{ padding: '12px 16px', maxWidth: 240 }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                                {items.slice(0, 3).map((it, idx) => (
+                                  <span key={idx} style={{ fontSize: 12, color: colors.text }}>
+                                    {it.product_name || '—'} <span style={{ color: colors.textMuted }}>(x{it.quantity})</span>
+                                  </span>
+                                ))}
+                                {items.length > 3 && (
+                                  <span style={{ fontSize: 11, color: colors.textMuted, fontStyle: 'italic' }}>
+                                    +{items.length - 3} sản phẩm khác
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, color: colors.danger }}>
+                              {totalQty}
+                            </td>
+                            <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, color: colors.success }}>
+                              {fmtVND(totalAmount)} đ
+                            </td>
+                            <td style={{ padding: '12px 16px' }}>
+                              <span style={{
+                                padding: '3px 10px', borderRadius: radius.full,
+                                fontSize: 11, fontWeight: 700,
+                                background: item.status === 'return_completed' ? colors.successSoft : colors.warningSoft,
+                                color: item.status === 'return_completed' ? colors.success : colors.warning,
+                                border: `1px solid ${item.status === 'return_completed' ? colors.successBorder : colors.warningBorder}`,
+                              }}>
+                                {item.status === 'return_completed' ? 'Đã xử lý' : 'Chờ xử lý'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Summary footer */}
+                <div style={{
+                  padding: '12px 20px', borderTop: `1.5px solid ${colors.border}`,
+                  display: 'flex', justifyContent: 'flex-end', gap: 24,
+                  background: colors.backgroundAlt, fontSize: 13,
+                }}>
+                  <span style={{ color: colors.textMuted }}>
+                    Tổng cộng: <strong style={{ color: colors.text }}>{filteredDefectiveOrders.length} đơn lỗi</strong>
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

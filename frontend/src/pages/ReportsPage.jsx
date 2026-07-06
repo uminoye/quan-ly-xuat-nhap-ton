@@ -1,27 +1,47 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
+  Bar, BarChart, CartesianGrid, Cell, Legend,
+  Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
 import api from '../services/api';
-import ExcelJS from 'exceljs';
+import { getSalesReport, getLogisticsReport, getWarehouseReport, getFactoryReport, getInventoryReport } from '../services/reportService';
+import { exportInventoryReport, exportSalesReport, exportLogisticsReport, exportWarehouseReport, exportFactoryReport } from '../utils/excelExport';
 
 const PIE_COLORS = ['#2563eb', '#0ea5e9', '#10b981', '#7c3aed', '#f59e0b', '#ef4444'];
+const fmtCurrency = (value) => new Intl.NumberFormat('vi-VN').format(value || 0);
+
+const PERIOD_OPTIONS = [
+  { value: 'day', label: 'Ngày' },
+  { value: 'week', label: 'Tuần' },
+  { value: 'month', label: 'Tháng' },
+  { value: 'quarter', label: 'Quý' },
+];
+
+function StatCard({ label, value, accent, icon }) {
+  return (
+    <div style={{
+      background: '#fff', borderRadius: 20, padding: '18px 20px',
+      border: '1px solid #e0e7ff', boxShadow: '0 10px 30px rgba(15,23,42,0.05)',
+      display: 'flex', alignItems: 'center', gap: 12,
+    }}>
+      <div style={{ width: 44, height: 44, borderRadius: 14, background: accent, color: '#fff', display: 'grid', placeItems: 'center', fontSize: 20 }}>
+        <i className={icon} />
+      </div>
+      <div>
+        <div style={{ fontSize: 12, color: '#64748b', fontWeight: 700 }}>{label}</div>
+        <div style={{ fontSize: 24, fontWeight: 800, color: '#0f172a' }}>{value}</div>
+      </div>
+    </div>
+  );
+}
 
 export default function ReportsPage() {
-  const [reportData, setReportData] = useState([]);
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const roleId = user?.role_id;
+  const [period, setPeriod] = useState('month');
   const [loading, setLoading] = useState(true);
+  const [data, setData] = useState(null);
   const [error, setError] = useState('');
-  const [warehouseFilter, setWarehouseFilter] = useState('all');
-  const [skuFilter, setSkuFilter] = useState('');
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -29,541 +49,420 @@ export default function ReportsPage() {
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  const fetchReport = async () => {
-    try {
-      setError('');
-      const res = await api.get('/reports/inventory');
-      setReportData(Array.isArray(res.data) ? res.data : []);
-    } catch (err) {
-      console.error('Lỗi tải báo cáo', err);
-      setError('Không thể tải dữ liệu báo cáo. Vui lòng thử lại sau.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchReport();
-  }, []);
-
-  const normalizedSkuFilter = skuFilter.trim().toLowerCase();
-
-  const warehouseOptions = useMemo(() => {
-    const names = new Set(reportData.map((item) => item.warehouse_name).filter(Boolean));
-    return Array.from(names).sort((a, b) => a.localeCompare(b, 'vi'));
-  }, [reportData]);
-
-  const filteredData = useMemo(() => {
-    return reportData.filter((item) => {
-      const matchesWarehouse = warehouseFilter === 'all' || item.warehouse_name === warehouseFilter;
-      const matchesSku = !normalizedSkuFilter || String(item.sku || '').toLowerCase().includes(normalizedSkuFilter);
-      return matchesWarehouse && matchesSku;
-    });
-  }, [normalizedSkuFilter, reportData, warehouseFilter]);
-
-  const summary = useMemo(() => {
-    const totalItems = filteredData.length;
-    const totalQuantity = filteredData.reduce((sum, item) => sum + Number(item.on_hand_qty || 0), 0);
-    const totalValue = filteredData.reduce((sum, item) => sum + Number(item.total_value || 0), 0);
-    const lowStock = filteredData.filter((item) => Number(item.on_hand_qty || 0) <= 10).length;
-    return { totalItems, totalQuantity, totalValue, lowStock };
-  }, [filteredData]);
-
-  const chartData = useMemo(() => {
-    return [...filteredData]
-      .sort((a, b) => Number(b.total_value || 0) - Number(a.total_value || 0))
-      .slice(0, 6)
-      .map((item) => ({
-        label: item.sku,
-        name: item.product_name,
-        warehouse: item.warehouse_name,
-        value: Number(item.total_value || 0),
-        quantity: Number(item.on_hand_qty || 0),
-      }));
-  }, [filteredData]);
-
-  const warehouseChartData = useMemo(() => {
-    const totals = filteredData.reduce((acc, item) => {
-      const warehouse = item.warehouse_name || 'Không xác định';
-      acc[warehouse] = (acc[warehouse] || 0) + Number(item.total_value || 0);
-      return acc;
-    }, {});
-
-    return Object.entries(totals)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value);
-  }, [filteredData]);
-
-  const formatCurrency = (value) => new Intl.NumberFormat('vi-VN').format(Number(value || 0));
-  const formatDate = () => new Date().toISOString().split('T')[0];
-
-  const getEnterStyle = (delay = 0, offset = 16) => ({
-    opacity: mounted ? 1 : 0,
-    transform: mounted ? 'translateY(0)' : `translateY(${offset}px)`,
-    transition: `opacity 600ms ease ${delay}ms, transform 600ms ease ${delay}ms`,
-  });
-
-  const getRowStyle = (index) => ({
-    opacity: mounted && !loading ? 1 : 0,
-    transform: mounted && !loading ? 'translateY(0)' : 'translateY(12px)',
-    transition: `opacity 420ms ease ${120 + index * 45}ms, transform 420ms ease ${120 + index * 45}ms`,
-  });
-
-  const getStockTone = (qty) => {
-    const value = Number(qty || 0);
-    if (value <= 10) {
-      return {
-        color: '#f97316',
-      };
-    }
-
-    return {
-      color: '#22c55e',
-    };
-  };
-
-  const chartCardBaseStyle = {
-    background: 'rgba(255,255,255,0.92)',
-    backdropFilter: 'blur(14px)',
-    border: '1px solid rgba(148,163,184,0.16)',
-    borderRadius: '24px',
-    padding: '20px 22px',
-    boxShadow: '0 18px 50px rgba(15, 23, 42, 0.08)',
-    transition: 'transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease',
-  };
-
-  const handlePulseHover = (e, accent = '#2563eb') => {
-    e.currentTarget.style.transform = 'translateY(-4px) scale(1.01)';
-    e.currentTarget.style.boxShadow = `0 22px 56px ${accent}22`;
-    e.currentTarget.style.borderColor = `${accent}55`;
-    const pulse = e.currentTarget.querySelector('[data-pulse]');
-    if (pulse) pulse.style.animationPlayState = 'running';
-  };
-
-  const handlePulseLeave = (e) => {
-    e.currentTarget.style.transform = 'translateY(0) scale(1)';
-    e.currentTarget.style.boxShadow = '0 18px 50px rgba(15, 23, 42, 0.08)';
-    e.currentTarget.style.borderColor = 'rgba(148,163,184,0.16)';
-    const pulse = e.currentTarget.querySelector('[data-pulse]');
-    if (pulse) pulse.style.animationPlayState = 'paused';
-  };
-
-  const exportToExcel = async () => {
-    if (filteredData.length === 0) return alert('Không có dữ liệu để xuất!');
-
-    const workbook = new ExcelJS.Workbook();
-    workbook.creator = 'Inventory Management';
-    workbook.created = new Date();
-    workbook.modified = new Date();
-    workbook.company = 'Inventory Management';
-    workbook.subject = 'Báo cáo tồn kho tổng hợp';
-    workbook.title = 'BÁO CÁO TỒN KHO TỔNG HỢP';
-    workbook.properties.date1904 = true;
-
-    const reportTitle = 'BÁO CÁO TỒN KHO TỔNG HỢP';
-    const reportSubtitle = 'Inventory Overview & Stock Intelligence';
-    const generatedAt = new Date().toLocaleString('vi-VN');
-    const selectedWarehouse = warehouseFilter === 'all' ? 'Tất cả kho' : warehouseFilter;
-    const totalItems = filteredData.length;
-    const totalQuantity = filteredData.reduce((sum, item) => sum + Number(item.on_hand_qty || 0), 0);
-    const totalValue = filteredData.reduce((sum, item) => sum + Number(item.total_value || 0), 0);
-    const lowStock = filteredData.filter((item) => Number(item.on_hand_qty || 0) <= 10).length;
-
-    const inventorySheet = workbook.addWorksheet('Bao_Cao_Ton_Kho', {
-      views: [{ state: 'frozen', ySplit: 9 }],
-      properties: { defaultRowHeight: 22 },
-    });
-
-    inventorySheet.columns = [
-      { header: 'Mã SKU', key: 'sku', width: 18 },
-      { header: 'Tên Sản Phẩm', key: 'product_name', width: 30 },
-      { header: 'Kho', key: 'warehouse_name', width: 24 },
-      { header: 'Số Lượng Tồn', key: 'on_hand_qty', width: 16 },
-      { header: 'Đơn Vị', key: 'unit', width: 12 },
-      { header: 'Đơn Giá', key: 'sale_price', width: 16 },
-      { header: 'Thành Tiền (VND)', key: 'total_value', width: 20 },
-    ];
-
-    inventorySheet.mergeCells('A1:G1');
-    inventorySheet.getCell('A1').value = reportTitle;
-    inventorySheet.getCell('A1').font = { bold: true, size: 18, color: { argb: 'FFFFFF' } };
-    inventorySheet.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
-    inventorySheet.getCell('A1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '1D4ED8' } };
-
-    inventorySheet.mergeCells('A2:G2');
-    inventorySheet.getCell('A2').value = reportSubtitle;
-    inventorySheet.getCell('A2').font = { italic: true, size: 12, color: { argb: 'DBEAFE' } };
-    inventorySheet.getCell('A2').alignment = { horizontal: 'center', vertical: 'middle' };
-    inventorySheet.getCell('A2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '1D4ED8' } };
-
-    inventorySheet.mergeCells('A4:C4');
-    inventorySheet.mergeCells('D4:F4');
-    inventorySheet.mergeCells('G4:G4');
-    inventorySheet.mergeCells('A5:C5');
-    inventorySheet.mergeCells('D5:F5');
-    inventorySheet.mergeCells('G5:G5');
-
-    inventorySheet.getCell('A4').value = `Thời điểm xuất: ${generatedAt}`;
-    inventorySheet.getCell('D4').value = `Kho đang lọc: ${selectedWarehouse}`;
-    inventorySheet.getCell('G4').value = `Tổng mặt hàng: ${totalItems}`;
-    inventorySheet.getCell('A5').value = `Tổng số lượng tồn: ${totalQuantity}`;
-    inventorySheet.getCell('D5').value = `Giá trị tồn kho: ${formatCurrency(totalValue)} đ`;
-    inventorySheet.getCell('G5').value = `Cảnh báo tồn thấp: ${lowStock}`;
-
-    ['A4', 'D4', 'G4', 'A5', 'D5', 'G5'].forEach((cellRef) => {
-      const cell = inventorySheet.getCell(cellRef);
-      cell.font = { bold: true, color: { argb: '0F172A' } };
-      cell.alignment = { vertical: 'middle' };
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'EFF6FF' } };
-      cell.border = {
-        top: { style: 'thin', color: { argb: 'BFDBFE' } },
-        left: { style: 'thin', color: { argb: 'BFDBFE' } },
-        bottom: { style: 'thin', color: { argb: 'BFDBFE' } },
-        right: { style: 'thin', color: { argb: 'BFDBFE' } },
-      };
-    });
-
-    const headerRow = inventorySheet.getRow(9);
-    headerRow.values = ['Mã SKU', 'Tên Sản Phẩm', 'Kho', 'Số Lượng Tồn', 'Đơn Vị', 'Đơn Giá', 'Thành Tiền (VND)'];
-    headerRow.font = { bold: true, color: { argb: 'FFFFFF' } };
-    headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
-    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '1D4ED8' } };
-
-    filteredData.forEach((item) => {
-      const row = inventorySheet.addRow({
-        sku: item.sku,
-        product_name: item.product_name,
-        warehouse_name: item.warehouse_name,
-        on_hand_qty: Number(item.on_hand_qty || 0),
-        unit: item.unit,
-        sale_price: Number(item.sale_price || 0),
-        total_value: Number(item.total_value || 0),
-      });
-
-      row.eachCell((cell, colNumber) => {
-        cell.border = {
-          top: { style: 'thin', color: { argb: 'E2E8F0' } },
-          left: { style: 'thin', color: { argb: 'E2E8F0' } },
-          bottom: { style: 'thin', color: { argb: 'E2E8F0' } },
-          right: { style: 'thin', color: { argb: 'E2E8F0' } },
-        };
-        cell.alignment = { vertical: 'middle' };
-        if (colNumber === 4 || colNumber === 6 || colNumber === 7) cell.numFmt = '#,##0';
-      });
-
-      if (Number(item.on_hand_qty || 0) <= 10) {
-        row.eachCell((cell) => {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FEF2F2' } };
-          cell.font = { color: { argb: 'B91C1C' } };
-        });
+    (async () => {
+      setLoading(true);
+      setError('');
+      try {
+        let res;
+        switch (roleId) {
+          case 2: res = await getSalesReport(period); break;
+          case 3: res = await getLogisticsReport(period); break;
+          case 4: res = await getWarehouseReport(period); break;
+          case 5: res = await getFactoryReport(period); break;
+          default: res = await getInventoryReport(); break;
+        }
+        setData(res || {});
+      } catch (err) {
+        console.error('Lỗi tải báo cáo', err);
+        setError('Không thể tải dữ liệu báo cáo.');
+      } finally {
+        setLoading(false);
       }
-    });
+    })();
+  }, [roleId, period]);
 
-    const summaryRowIndex = inventorySheet.lastRow.number + 2;
-    inventorySheet.mergeCells(`A${summaryRowIndex}:G${summaryRowIndex}`);
-    const summaryCell = inventorySheet.getCell(`A${summaryRowIndex}`);
-    summaryCell.value = `Tổng kết: ${totalItems} mặt hàng • ${totalQuantity} số lượng tồn • ${formatCurrency(totalValue)} đ giá trị • ${lowStock} cảnh báo tồn thấp`;
-    summaryCell.font = { bold: true, color: { argb: '0F172A' } };
-    summaryCell.alignment = { horizontal: 'center' };
-    summaryCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'DBEAFE' } };
-    summaryCell.border = {
-      top: { style: 'thin', color: { argb: '93C5FD' } },
-      left: { style: 'thin', color: { argb: '93C5FD' } },
-      bottom: { style: 'thin', color: { argb: '93C5FD' } },
-      right: { style: 'thin', color: { argb: '93C5FD' } },
+  const roleTitle = roleId === 1 ? 'Báo cáo Tổng quan' : roleId === 2 ? 'Báo cáo Doanh thu (Sales)' : roleId === 3 ? 'Báo cáo Vận chuyển (Logistics)' : roleId === 4 ? 'Báo cáo Kho (Warehouse)' : roleId === 5 ? 'Báo cáo Sản xuất (Nhà máy)' : 'Báo cáo';
+  const roleColor = roleId === 1 ? '#2563eb' : roleId === 2 ? '#10b981' : roleId === 3 ? '#f97316' : roleId === 4 ? '#7c3aed' : roleId === 5 ? '#f59e0b' : '#64748b';
+
+  if (loading) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', color: '#94a3b8' }}>
+      <i className="ri-loader-4-line" style={{ fontSize: 28, marginRight: 12, animation: 'spin 1s linear infinite' }} />Đang tải báo cáo...
+    </div>
+  );
+
+  const renderInventoryReport = () => {
+    const items = Array.isArray(data) ? data : [];
+    const summary = {
+      totalItems: items.length,
+      totalQty: items.reduce((s, i) => s + Number(i.on_hand_qty || 0), 0),
+      totalValue: items.reduce((s, i) => s + Number((i.on_hand_qty || 0) * (i.sale_price || 0)), 0),
     };
-
-    const warehouseSheet = workbook.addWorksheet('Thong_Ke_Theo_Kho', {
-      properties: { defaultRowHeight: 22 },
+    const warehouseMap = {};
+    items.forEach(it => {
+      const wh = it.warehouse_name || 'Khác';
+      if (!warehouseMap[wh]) warehouseMap[wh] = { name: wh, value: 0, qty: 0 };
+      warehouseMap[wh].value += (it.on_hand_qty || 0) * (it.sale_price || 0);
+      warehouseMap[wh].qty += Number(it.on_hand_qty || 0);
     });
+    const whChart = Object.values(warehouseMap).sort((a, b) => b.value - a.value);
 
-    warehouseSheet.columns = [
-      { header: 'Kho', key: 'warehouse_name', width: 28 },
-      { header: 'Số mặt hàng', key: 'item_count', width: 14 },
-      { header: 'Tổng số lượng', key: 'total_quantity', width: 16 },
-      { header: 'Tổng giá trị', key: 'total_value', width: 18 },
-      { header: 'Tồn thấp', key: 'low_stock_count', width: 12 },
-    ];
+    return (
+      <>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 14, marginBottom: 18 }}>
+          <StatCard label="Mã SP" value={summary.totalItems} accent={roleColor} icon="ri-box-3-line" />
+          <StatCard label="Tổng tồn" value={summary.totalQty} accent="#10b981" icon="ri-stack-line" />
+          <StatCard label="Giá trị tồn" value={`${fmtCurrency(summary.totalValue)} đ`} accent="#f59e0b" icon="ri-coins-line" />
+        </div>
 
-    const warehouseSummaryRows = warehouseChartData.map((warehouse) => {
-      const warehouseItems = filteredData.filter((item) => (item.warehouse_name || 'Không xác định') === warehouse.name);
-      return {
-        warehouse_name: warehouse.name,
-        item_count: warehouseItems.length,
-        total_quantity: warehouseItems.reduce((sum, item) => sum + Number(item.on_hand_qty || 0), 0),
-        total_value: warehouse.value,
-        low_stock_count: warehouseItems.filter((item) => Number(item.on_hand_qty || 0) <= 10).length,
-      };
-    });
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 18 }}>
+          <div style={{ background: '#fff', borderRadius: 20, padding: 20, border: '1px solid #e0e7ff', boxShadow: '0 10px 30px rgba(15,23,42,0.05)' }}>
+            <h3 style={{ margin: '0 0 14px', fontSize: 16, fontWeight: 800 }}>Top 6 giá trị tồn cao</h3>
+            {items.length > 0 ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={[...items].sort((a, b) => (b.on_hand_qty * b.sale_price) - (a.on_hand_qty * a.sale_price)).slice(0, 6)} barCategoryGap={14}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e0e7ff" />
+                  <XAxis dataKey="sku" tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} tickFormatter={v => `${v/1000000}tr`} />
+                  <Tooltip formatter={(v) => [`${fmtCurrency(v)} đ`, 'Giá trị']} />
+                  <Bar dataKey="sale_price" name="Đơn giá" radius={[8, 8, 0, 0]} fill="#2563eb" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Chưa có dữ liệu</div>}
+          </div>
 
-    warehouseSummaryRows.forEach((row) => {
-      const excelRow = warehouseSheet.addRow(row);
-      excelRow.eachCell((cell) => {
-        cell.border = {
-          top: { style: 'thin', color: { argb: 'E2E8F0' } },
-          left: { style: 'thin', color: { argb: 'E2E8F0' } },
-          bottom: { style: 'thin', color: { argb: 'E2E8F0' } },
-          right: { style: 'thin', color: { argb: 'E2E8F0' } },
-        };
-      });
-    });
+          <div style={{ background: '#fff', borderRadius: 20, padding: 20, border: '1px solid #e0e7ff', boxShadow: '0 10px 30px rgba(15,23,42,0.05)' }}>
+            <h3 style={{ margin: '0 0 14px', fontSize: 16, fontWeight: 800 }}>Phân bổ theo kho</h3>
+            {whChart.length > 0 ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <PieChart>
+                  <Pie data={whChart} dataKey="value" nameKey="name" innerRadius={60} outerRadius={100} paddingAngle={3}>
+                    {whChart.map((entry, i) => <Cell key={entry.name} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip formatter={(v) => [`${fmtCurrency(v)} đ`, 'Giá trị']} />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Chưa có dữ liệu</div>}
+          </div>
+        </div>
 
-    warehouseSheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFF' } };
-    warehouseSheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '059669' } };
-    warehouseSheet.getRow(1).alignment = { horizontal: 'center', vertical: 'middle' };
-    warehouseSheet.eachRow((row, rowNumber) => {
-      if (rowNumber > 1) {
-        const valueCell = row.getCell(4);
-        if (Number(valueCell.value || 0) > 0) valueCell.numFmt = '#,##0';
-      }
-    });
+        <div style={{ background: '#fff', borderRadius: 20, padding: 20, border: '1px solid #e0e7ff', boxShadow: '0 10px 30px rgba(15,23,42,0.05)' }}>
+          <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 800 }}>Chi tiết tồn kho</h3>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead><tr style={{ fontSize: 12, color: '#94a3b8', borderBottom: '1px solid #e0e7ff' }}>
+              <th style={{ padding: '8px 0', textAlign: 'left' }}>SKU</th>
+              <th style={{ padding: '8px 0', textAlign: 'left' }}>Sản phẩm</th>
+              <th style={{ padding: '8px 0', textAlign: 'left' }}>Kho</th>
+              <th style={{ padding: '8px 0', textAlign: 'right' }}>Tồn</th>
+              <th style={{ padding: '8px 0', textAlign: 'right' }}>Đơn giá</th>
+              <th style={{ padding: '8px 0', textAlign: 'right' }}>Thành tiền</th>
+            </tr></thead>
+            <tbody>
+              {items.length === 0 ? <tr><td colSpan="6" style={{ padding: 16, textAlign: 'center', color: '#94a3b8' }}>Không có dữ liệu</td></tr> :
+                items.map((it, i) => (
+                  <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '9px 0', fontWeight: 700 }}>{it.sku}</td>
+                    <td style={{ padding: '9px 0', fontSize: 13 }}>{it.product_name}</td>
+                    <td style={{ padding: '9px 0', fontSize: 13 }}>{it.warehouse_name}</td>
+                    <td style={{ padding: '9px 0', textAlign: 'right', fontWeight: 700 }}>{it.on_hand_qty} {it.unit}</td>
+                    <td style={{ padding: '9px 0', textAlign: 'right', fontSize: 13 }}>{fmtCurrency(it.sale_price)} đ</td>
+                    <td style={{ padding: '9px 0', textAlign: 'right', fontWeight: 800, color: roleColor }}>{fmtCurrency(it.total_value)} đ</td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+        </div>
+      </>
+    );
+  };
 
-    await workbook.xlsx.writeBuffer().then((buffer) => {
-      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `Bao_Cao_Ton_Kho_${formatDate()}.xlsx`;
-      link.click();
-      window.URL.revokeObjectURL(url);
-    });
+  const renderSalesReport = () => {
+    const charts = data?.charts || {};
+    const tables = data?.tables || {};
+    const s = data?.summary || {};
+
+    const revenueData = (charts.revenue_by_period || []).map(r => ({ ...r, revenue: Number(r.revenue || 0), name: r.period }));
+    const topProducts = Array.isArray(tables.top_products) ? tables.top_products : [];
+    const topCustomers = Array.isArray(tables.top_customers) ? tables.top_customers : [];
+    const orderStats = Array.isArray(tables.order_stats) ? tables.order_stats : [];
+
+    return (
+      <>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 14, marginBottom: 18 }}>
+          <StatCard label="Tổng đơn" value={s.total_orders || 0} accent={roleColor} icon="ri-shopping-bag-3-line" />
+          <StatCard label="Tổng doanh thu" value={`${fmtCurrency(s.total_revenue)} đ`} accent="#10b981" icon="ri-money-cny-circle-line" />
+          <StatCard label="Kỳ báo cáo" value={data?.period || '—'} accent="#7c3aed" icon="ri-calendar-line" />
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 18 }}>
+          <div style={{ background: '#fff', borderRadius: 20, padding: 20, border: '1px solid #e0e7ff', boxShadow: '0 10px 30px rgba(15,23,42,0.05)' }}>
+            <h3 style={{ margin: '0 0 14px', fontSize: 16, fontWeight: 800 }}>Doanh thu theo {data?.group_by === 'month' ? 'tháng' : 'ngày'}</h3>
+            {revenueData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={revenueData} barCategoryGap={14}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e0e7ff" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} tickFormatter={v => `${v/1000000}tr`} />
+                  <Tooltip formatter={(v) => [`${fmtCurrency(v)} đ`, 'Doanh thu']} />
+                  <Bar dataKey="revenue" radius={[8, 8, 0, 0]} fill="#10b981" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Chưa có dữ liệu</div>}
+          </div>
+
+          <div style={{ background: '#fff', borderRadius: 20, padding: 20, border: '1px solid #e0e7ff', boxShadow: '0 10px 30px rgba(15,23,42,0.05)' }}>
+            <h3 style={{ margin: '0 0 14px', fontSize: 16, fontWeight: 800 }}>Trạng thái đơn hàng</h3>
+            {orderStats.length > 0 ? (
+              <div style={{ display: 'grid', gap: 8 }}>
+                {orderStats.map((st, i) => (
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', borderRadius: 12, background: '#f8fafc', border: '1px solid #e0e7ff', fontSize: 13 }}>
+                    <span style={{ fontWeight: 700 }}>{st.status}</span>
+                    <span style={{ color: '#64748b' }}>{st.count} đơn • {fmtCurrency(st.revenue)} đ</span>
+                  </div>
+                ))}
+              </div>
+            ) : <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Chưa có dữ liệu</div>}
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <div style={{ background: '#fff', borderRadius: 20, padding: 20, border: '1px solid #e0e7ff', boxShadow: '0 10px 30px rgba(15,23,42,0.05)' }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 800 }}>Top sản phẩm bán chạy</h3>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead><tr style={{ fontSize: 12, color: '#94a3b8', borderBottom: '1px solid #e0e7ff' }}>
+                <th style={{ padding: '6px 0', textAlign: 'left' }}>SP</th><th style={{ padding: '6px 0', textAlign: 'right' }}>SL</th><th style={{ padding: '6px 0', textAlign: 'right' }}>Doanh thu</th>
+              </tr></thead>
+              <tbody>{topProducts.slice(0, 8).map((p, i) => (
+                <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                  <td style={{ padding: '7px 0', fontSize: 13, fontWeight: 600 }}>{p.name}</td>
+                  <td style={{ padding: '7px 0', textAlign: 'right', fontSize: 13 }}>{p.total_qty || 0}</td>
+                  <td style={{ padding: '7px 0', textAlign: 'right', fontSize: 13, fontWeight: 700, color: roleColor }}>{fmtCurrency(p.total_revenue)} đ</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+
+          <div style={{ background: '#fff', borderRadius: 20, padding: 20, border: '1px solid #e0e7ff', boxShadow: '0 10px 30px rgba(15,23,42,0.05)' }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 800 }}>Top khách hàng</h3>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead><tr style={{ fontSize: 12, color: '#94a3b8', borderBottom: '1px solid #e0e7ff' }}>
+                <th style={{ padding: '6px 0', textAlign: 'left' }}>Khách hàng</th><th style={{ padding: '6px 0', textAlign: 'right' }}>Đơn</th><th style={{ padding: '6px 0', textAlign: 'right' }}>Chi tiêu</th>
+              </tr></thead>
+              <tbody>{topCustomers.slice(0, 8).map((c, i) => (
+                <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                  <td style={{ padding: '7px 0', fontSize: 13, fontWeight: 600 }}>{c.company_name}</td>
+                  <td style={{ padding: '7px 0', textAlign: 'right', fontSize: 13 }}>{c.order_count || 0}</td>
+                  <td style={{ padding: '7px 0', textAlign: 'right', fontSize: 13, fontWeight: 700, color: '#10b981' }}>{fmtCurrency(c.total_spent)} đ</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        </div>
+      </>
+    );
+  };
+
+  const renderLogisticsReport = () => {
+    const t = data?.tables || {};
+    const charts = data?.charts || {};
+    const delStats = Array.isArray(t.delivery_stats) ? t.delivery_stats : [];
+    const retStats = Array.isArray(t.return_stats) ? t.return_stats : [];
+    const compStats = Array.isArray(t.compensation_stats) ? t.compensation_stats : [];
+    const carrierStats = Array.isArray(t.carrier_stats) ? t.carrier_stats : [];
+    const delData = (charts.deliveries_by_day || []).map(r => ({ ...r, deliveries: Number(r.deliveries || 0), name: r.date }));
+
+    return (
+      <>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 14, marginBottom: 18 }}>
+          <StatCard label="Giao hàng" value={delStats.reduce((s, r) => s + Number(r.count || 0), 0)} accent={roleColor} icon="ri-truck-line" />
+          <StatCard label="Hoàn hàng" value={retStats.reduce((s, r) => s + Number(r.count || 0), 0)} accent="#f97316" icon="ri-arrow-go-back-line" />
+          <StatCard label="Phiếu bù" value={compStats.reduce((s, r) => s + Number(r.count || 0), 0)} accent="#ef4444" icon="ri-file-list-3-line" />
+        </div>
+        <div style={{ background: '#fff', borderRadius: 20, padding: 20, border: '1px solid #e0e7ff', marginBottom: 14 }}>
+          <h3 style={{ margin: '0 0 14px', fontSize: 16, fontWeight: 800 }}>Giao hàng theo ngày</h3>
+          {delData.length > 0 ? <ResponsiveContainer width="100%" height={260}><BarChart data={delData}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e0e7ff" /><XAxis dataKey="name" tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} /><Tooltip /><Bar dataKey="deliveries" fill={roleColor} radius={[8, 8, 0, 0]} /></BarChart></ResponsiveContainer> : <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Chưa có dữ liệu</div>}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <div style={{ background: '#fff', borderRadius: 20, padding: 20, border: '1px solid #e0e7ff' }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 800 }}>Đơn vị vận chuyển</h3>
+            {carrierStats.length === 0 ? <div style={{ padding: 16, color: '#94a3b8', textAlign: 'center' }}>Chưa có dữ liệu</div> :
+              carrierStats.map((c, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderRadius: 10, background: '#f8fafc', marginBottom: 6, fontSize: 13 }}>
+                  <span style={{ fontWeight: 700 }}>{c.carrier_code}</span>
+                  <span style={{ color: '#64748b' }}>{c.shipments} đơn • {c.delivered} giao thành công</span>
+                </div>
+              ))}
+          </div>
+          <div style={{ background: '#fff', borderRadius: 20, padding: 20, border: '1px solid #e0e7ff' }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 800 }}>Phiếu bù theo loại lỗi</h3>
+            {compStats.length === 0 ? <div style={{ padding: 16, color: '#94a3b8', textAlign: 'center' }}>Chưa có dữ liệu</div> :
+              compStats.map((c, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderRadius: 10, background: '#f8fafc', marginBottom: 6, fontSize: 13 }}>
+                  <span style={{ fontWeight: 700 }}>{c.defect_type}</span>
+                  <span style={{ color: '#64748b' }}>{c.count} phiếu • {c.total_items} SP • {c.status}</span>
+                </div>
+              ))}
+          </div>
+        </div>
+      </>
+    );
+  };
+
+  const renderWarehouseReport = () => {
+    const t = data?.tables || {};
+    const charts = data?.charts || {};
+    const recStats = Array.isArray(t.receipt_stats) ? t.receipt_stats : [];
+    const outStats = Array.isArray(t.outbound_stats) ? t.outbound_stats : [];
+    const whSummary = Array.isArray(t.warehouse_summary) ? t.warehouse_summary : [];
+    const productMove = Array.isArray(t.product_movement) ? t.product_movement : [];
+    const recData = (charts.receipts_by_day || []).map(r => ({ ...r, receipts: Number(r.receipts || 0), name: r.date }));
+    const outData = (charts.outbounds_by_day || []).map(r => ({ ...r, outbounds: Number(r.outbounds || 0), name: r.date }));
+
+    return (
+      <>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 14, marginBottom: 18 }}>
+          {recStats.map((st, i) => (
+            <StatCard key={i} label={`Nhập: ${st.status}`} value={`${st.count} phiếu`} accent={roleColor} icon="ri-inbox-archive-line" />
+          ))}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 18 }}>
+          <div style={{ background: '#fff', borderRadius: 20, padding: 20, border: '1px solid #e0e7ff' }}>
+            <h3 style={{ margin: '0 0 14px', fontSize: 16, fontWeight: 800 }}>Nhập kho theo ngày</h3>
+            {recData.length > 0 ? <ResponsiveContainer width="100%" height={260}><BarChart data={recData}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e0e7ff" /><XAxis dataKey="name" tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} /><Tooltip /><Bar dataKey="receipts" fill="#10b981" radius={[8, 8, 0, 0]} /></BarChart></ResponsiveContainer> : <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Chưa có dữ liệu</div>}
+          </div>
+          <div style={{ background: '#fff', borderRadius: 20, padding: 20, border: '1px solid #e0e7ff' }}>
+            <h3 style={{ margin: '0 0 14px', fontSize: 16, fontWeight: 800 }}>Xuất kho theo ngày</h3>
+            {outData.length > 0 ? <ResponsiveContainer width="100%" height={260}><BarChart data={outData}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e0e7ff" /><XAxis dataKey="name" tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} /><Tooltip /><Bar dataKey="outbounds" fill="#7c3aed" radius={[8, 8, 0, 0]} /></BarChart></ResponsiveContainer> : <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Chưa có dữ liệu</div>}
+          </div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <div style={{ background: '#fff', borderRadius: 20, padding: 20, border: '1px solid #e0e7ff' }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 800 }}>Biến động hàng hóa</h3>
+            {productMove.length === 0 ? <div style={{ padding: 16, color: '#94a3b8', textAlign: 'center' }}>Chưa có dữ liệu</div> :
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead><tr style={{ fontSize: 12, color: '#94a3b8', borderBottom: '1px solid #e0e7ff' }}>
+                  <th style={{ padding: '6px 0', textAlign: 'left' }}>SP</th><th style={{ padding: '6px 0', textAlign: 'right' }}>Nhập</th><th style={{ padding: '6px 0', textAlign: 'right' }}>Xuất</th><th style={{ padding: '6px 0', textAlign: 'right' }}>Tồn</th>
+                </tr></thead>
+                <tbody>{productMove.slice(0, 10).map((p, i) => (
+                  <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '7px 0', fontSize: 13, fontWeight: 600 }}>{p.name}</td>
+                    <td style={{ padding: '7px 0', textAlign: 'right', color: '#10b981' }}>{p.total_in || 0}</td>
+                    <td style={{ padding: '7px 0', textAlign: 'right', color: '#ef4444' }}>{p.total_out || 0}</td>
+                    <td style={{ padding: '7px 0', textAlign: 'right', fontWeight: 700 }}>{p.current_stock || 0}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            }
+          </div>
+          <div style={{ background: '#fff', borderRadius: 20, padding: 20, border: '1px solid #e0e7ff' }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 800 }}>Tổng hợp theo kho</h3>
+            {whSummary.length === 0 ? <div style={{ padding: 16, color: '#94a3b8', textAlign: 'center' }}>Chưa có dữ liệu</div> :
+              whSummary.map((w, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 12px', borderRadius: 12, background: '#f8fafc', marginBottom: 6, fontSize: 13, border: '1px solid #e0e7ff' }}>
+                  <div><div style={{ fontWeight: 700 }}>{w.name}</div><div style={{ fontSize: 11, color: '#94a3b8' }}>{w.product_types} loại SP</div></div>
+                  <div style={{ textAlign: 'right' }}><div style={{ fontWeight: 800 }}>{w.total_qty || 0} SP</div><div style={{ fontSize: 11, color: '#64748b' }}>Nhập: {w.receipt_count || 0} • Xuất: {w.outbound_count || 0}</div></div>
+                </div>
+              ))
+            }
+          </div>
+        </div>
+      </>
+    );
+  };
+
+  const renderFactoryReport = () => {
+    const t = data?.tables || {};
+    const charts = data?.charts || {};
+    const recStats = Array.isArray(t.receipt_stats) ? t.receipt_stats : [];
+    const compStats = Array.isArray(t.compensation_stats) ? t.compensation_stats : [];
+    const pendingRec = Array.isArray(t.pending_receipts) ? t.pending_receipts : [];
+    const pendingComp = Array.isArray(t.pending_compensations) ? t.pending_compensations : [];
+    const recData = (charts.receipts_by_day || []).map(r => ({ ...r, receipts: Number(r.receipts || 0), name: r.date }));
+
+    return (
+      <>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 14, marginBottom: 18 }}>
+          <StatCard label="Phiếu nhập" value={recStats.reduce((s, r) => s + Number(r.count || 0), 0)} accent={roleColor} icon="ri-inbox-archive-line" />
+          <StatCard label="Phiếu bù" value={compStats.reduce((s, r) => s + Number(r.count || 0), 0)} accent="#ef4444" icon="ri-file-list-3-line" />
+          <StatCard label="Kỳ báo cáo" value={data?.period || '—'} accent="#7c3aed" icon="ri-calendar-line" />
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 18 }}>
+          <div style={{ background: '#fff', borderRadius: 20, padding: 20, border: '1px solid #e0e7ff' }}>
+            <h3 style={{ margin: '0 0 14px', fontSize: 16, fontWeight: 800 }}>Phiếu nhập theo ngày</h3>
+            {recData.length > 0 ? <ResponsiveContainer width="100%" height={260}><BarChart data={recData}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e0e7ff" /><XAxis dataKey="name" tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} /><Tooltip /><Bar dataKey="receipts" fill={roleColor} radius={[8, 8, 0, 0]} /></BarChart></ResponsiveContainer> : <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Chưa có dữ liệu</div>}
+          </div>
+          <div style={{ background: '#fff', borderRadius: 20, padding: 20, border: '1px solid #e0e7ff' }}>
+            <h3 style={{ margin: '0 0 14px', fontSize: 16, fontWeight: 800 }}>Trạng thái phiếu bù</h3>
+            {compStats.length === 0 ? <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Chưa có dữ liệu</div> :
+              <div style={{ display: 'grid', gap: 8 }}>
+                {compStats.map((c, i) => (
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', borderRadius: 12, background: '#f8fafc', border: '1px solid #e0e7ff', fontSize: 13 }}>
+                    <span style={{ fontWeight: 700 }}>{c.defect_type} — {c.status}</span>
+                    <span style={{ color: '#64748b' }}>{c.count} phiếu • {c.total_items || 0} SP</span>
+                  </div>
+                ))}
+              </div>
+            }
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <div style={{ background: '#fff', borderRadius: 20, padding: 20, border: '1px solid #e0e7ff' }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 800 }}>Phiếu nhập chờ duyệt</h3>
+            {pendingRec.length === 0 ? <div style={{ padding: 16, color: '#94a3b8', textAlign: 'center' }}>Không có phiếu chờ</div> :
+              pendingRec.map(r => (
+                <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 12px', borderRadius: 12, background: '#fffbeb', border: '1px solid #fde68a', marginBottom: 6, fontSize: 13 }}>
+                  <div><div style={{ fontWeight: 700 }}>{r.receipt_no}</div><div style={{ fontSize: 11, color: '#94a3b8' }}>{r.warehouse_name || '—'} • {r.item_count || 0} SP</div></div>
+                  <span style={{ fontSize: 12, color: '#92400e' }}>{r.note?.slice(0, 25) || '—'}</span>
+                </div>
+              ))
+            }
+          </div>
+          <div style={{ background: '#fff', borderRadius: 20, padding: 20, border: '1px solid #e0e7ff' }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 800 }}>Phiếu bù chờ xử lý</h3>
+            {pendingComp.length === 0 ? <div style={{ padding: 16, color: '#94a3b8', textAlign: 'center' }}>Không có phiếu bù chờ</div> :
+              pendingComp.map(c => (
+                <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 12px', borderRadius: 12, background: '#fef2f2', border: '1px solid #fecaca', marginBottom: 6, fontSize: 13 }}>
+                  <div><div style={{ fontWeight: 700, color: '#ef4444' }}>{c.compensation_no}</div><div style={{ fontSize: 11, color: '#94a3b8' }}>{c.order_no} • {c.customer_name || '—'}</div></div>
+                  <span style={{ padding: '3px 8px', borderRadius: 999, background: '#fee2e2', color: '#b91c1c', fontWeight: 700, fontSize: 11 }}>{c.defect_type}</span>
+                </div>
+              ))
+            }
+          </div>
+        </div>
+      </>
+    );
   };
 
   return (
-    <div style={{ minHeight: '100%', padding: '24px', background: 'radial-gradient(circle at top left, rgba(59,130,246,0.14), transparent 28%), radial-gradient(circle at top right, rgba(16,185,129,0.12), transparent 24%), #f5f7fb' }}>
-      <style>{`@keyframes reportsPulse { 0% { box-shadow: 0 0 0 0 rgba(37,99,235,0.18); } 70% { box-shadow: 0 0 0 14px rgba(37,99,235,0); } 100% { box-shadow: 0 0 0 0 rgba(37,99,235,0); } }`}</style>
-      <div style={{ maxWidth: '1440px', margin: '0 auto' }}>
-        <div style={{ ...getEnterStyle(0, 18), display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', marginBottom: '22px', flexWrap: 'wrap' }}>
-          <div style={{ display: 'grid', gap: '6px' }}>
-            <h1 style={{ margin: 0, color: '#0f172a', fontSize: '30px', lineHeight: 1.05, letterSpacing: '-0.04em' }}>
-              BÁO CÁO TỒN KHO TỔNG HỢP
-            </h1>
-            <p style={{ margin: 0, color: '#64748b', fontSize: '15px', fontWeight: 600, letterSpacing: '0.01em' }}>
-              Inventory Overview &amp; Stock Intelligence
-            </p>
-          </div>
+    <div style={{ padding: 24, minHeight: '100vh', background: 'linear-gradient(160deg, #f5f7fb, #eef3f9)', opacity: mounted ? 1 : 0, transition: 'opacity 320ms' }}>
+      <style>{`@keyframes spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }`}</style>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <button onClick={exportToExcel} style={{ padding: '14px 18px', background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)', color: 'white', border: 'none', borderRadius: '16px', cursor: 'pointer', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '10px', boxShadow: '0 10px 30px rgba(34,197,94,0.22)' }}>
-              <i className="ri-download-2-line" style={{ fontSize: '16px' }} />
-              Xuất Excel
+      <div style={{ maxWidth: 1440, margin: '0 auto' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 18 }}>
+          <div>
+            <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, color: '#0f172a' }}>{roleTitle}</h1>
+            <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: 13 }}>Chu kỳ: <strong>{data?.period || 'Tất cả'}</strong></p>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {PERIOD_OPTIONS.map(p => (
+              <button key={p.value} onClick={() => setPeriod(p.value)}
+                style={{ padding: '8px 14px', borderRadius: 10, border: '1px solid #dbe3ee', background: period === p.value ? roleColor : '#fff', color: period === p.value ? '#fff' : '#475569', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>
+                {p.label}
+              </button>
+            ))}
+            <button
+              onClick={() => roleId === 1 || !roleId ? exportInventoryReport(data)
+                : roleId === 2 ? exportSalesReport(data)
+                : roleId === 3 ? exportLogisticsReport(data)
+                : roleId === 4 ? exportWarehouseReport(data)
+                : exportFactoryReport(data)}
+              style={{ padding: '8px 16px', borderRadius: 10, border: '1px solid #dbe3ee', background: '#fff', color: roleColor, fontWeight: 700, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 5 }}>
+              <i className="ri-file-excel-2-line" style={{ fontSize: 15 }} />Xuất Excel
             </button>
           </div>
         </div>
 
-        <div style={{ ...getEnterStyle(80, 18), display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '16px', marginBottom: '22px' }}>
-          {[
-            { label: 'Mặt hàng', value: summary.totalItems, accent: '#2563eb', icon: 'ri-box-3-line' },
-            { label: 'Tổng số lượng', value: summary.totalQuantity, accent: '#7c3aed', icon: 'ri-stack-line' },
-            { label: 'Giá trị tồn kho', value: `${formatCurrency(summary.totalValue)} đ`, accent: '#059669', icon: 'ri-coins-line' },
-            { label: 'Cảnh báo tồn thấp', value: summary.lowStock, accent: '#ea580c', icon: 'ri-alarm-warning-line' },
-          ].map((item) => (
-            <div key={item.label} onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-6px)'; e.currentTarget.style.boxShadow = `0 18px 40px ${item.accent}22`; e.currentTarget.style.borderColor = `${item.accent}55`; }} onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 12px 32px rgba(15,23,42,0.06)'; e.currentTarget.style.borderColor = 'rgba(148,163,184,0.18)'; }} style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.96), rgba(248,250,252,0.92))', backdropFilter: 'blur(12px)', border: '1px solid rgba(148,163,184,0.18)', borderRadius: '20px', padding: '18px', boxShadow: '0 12px 32px rgba(15,23,42,0.06)', transition: 'transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease', cursor: 'default' }}>
-              <div style={{ width: '42px', height: '42px', borderRadius: '14px', display: 'grid', placeItems: 'center', marginBottom: '12px', background: `${item.accent}14`, color: item.accent, fontSize: '20px' }}>
-                <i className={item.icon} />
-              </div>
-              <div style={{ color: '#64748b', fontSize: '13px', marginBottom: '10px', fontWeight: 600 }}>{item.label}</div>
-              <div style={{ color: item.accent, fontSize: '24px', fontWeight: 800, letterSpacing: '-0.02em' }}>{item.value}</div>
-            </div>
-          ))}
-        </div>
-
-        <div style={{ ...getEnterStyle(160, 18), background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(14px)', border: '1px solid rgba(148,163,184,0.16)', borderRadius: '24px', padding: '20px 22px', boxShadow: '0 18px 50px rgba(15, 23, 42, 0.08)', marginBottom: '18px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '16px' }}>
-            <div>
-              <h3 style={{ margin: 0, color: '#0f172a', fontSize: '18px' }}>Bộ lọc báo cáo</h3>
-              <p style={{ margin: '6px 0 0', color: '#64748b', fontSize: '14px' }}>Lọc theo kho hoặc SKU để tập trung vào nhóm dữ liệu cần xem.</p>
-            </div>
-            <div style={{ fontSize: '13px', color: '#64748b' }}>{filteredData.length} bản ghi phù hợp</div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '14px' }}>
-            <label style={{ display: 'grid', gap: '8px' }}>
-              <span style={{ fontSize: '13px', fontWeight: 700, color: '#334155' }}>Kho</span>
-              <select value={warehouseFilter} onChange={(e) => setWarehouseFilter(e.target.value)} style={{ padding: '12px 14px', borderRadius: '14px', border: '1px solid #cbd5e1', background: 'white', color: '#0f172a', outline: 'none' }}>
-                <option value="all">Tất cả kho</option>
-                {warehouseOptions.map((warehouse) => (
-                  <option key={warehouse} value={warehouse}>{warehouse}</option>
-                ))}
-              </select>
-            </label>
-
-            <label style={{ display: 'grid', gap: '8px' }}>
-              <span style={{ fontSize: '13px', fontWeight: 700, color: '#334155' }}>SKU</span>
-              <input value={skuFilter} onChange={(e) => setSkuFilter(e.target.value)} placeholder="Nhập SKU cần tìm" style={{ padding: '12px 14px', borderRadius: '14px', border: '1px solid #cbd5e1', background: 'white', color: '#0f172a', outline: 'none' }} />
-            </label>
-          </div>
-
-          <div style={{ display: 'flex', gap: '10px', marginTop: '14px', flexWrap: 'wrap' }}>
-            <button onClick={() => { setWarehouseFilter('all'); setSkuFilter(''); }} style={{ padding: '10px 14px', borderRadius: '12px', border: '1px solid #cbd5e1', background: 'white', cursor: 'pointer', fontWeight: 700, color: '#334155' }}>
-              Xóa bộ lọc
-            </button>
-          </div>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px', marginBottom: '22px' }}>
-          <div onMouseEnter={(e) => handlePulseHover(e, '#2563eb')} onMouseLeave={handlePulseLeave} style={{ ...getEnterStyle(240, 18), ...chartCardBaseStyle, position: 'relative', overflow: 'hidden' }}>
-            <div data-pulse style={{ position: 'absolute', inset: '-2px', borderRadius: '24px', pointerEvents: 'none', boxShadow: '0 0 0 0 rgba(37,99,235,0.18)', animation: 'reportsPulse 2.4s ease-out infinite', animationPlayState: 'paused' }} />
-            <div style={{ position: 'relative' }}>
-              <h3 style={{ margin: 0, color: '#0f172a', fontSize: '18px' }}>Biểu đồ cột top 6</h3>
-              <p style={{ margin: '6px 0 14px', color: '#64748b', fontSize: '14px' }}>So sánh các mặt hàng có giá trị tồn cao nhất trong dữ liệu đã lọc.</p>
-              {chartData.length > 0 ? (
-                <div style={{ width: '100%', height: 320, minWidth: 0 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 10 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                      <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 12 }} />
-                      <YAxis tick={{ fill: '#64748b', fontSize: 12 }} tickFormatter={(value) => `${value / 1000000}tr`} />
-                      <Tooltip formatter={(value) => `${formatCurrency(value)} đ`} labelFormatter={(label) => `SKU: ${label}`} />
-                      <Bar dataKey="value" name="Giá trị tồn" radius={[12, 12, 0, 0]} fill="#2563eb" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              ) : (
-                <div style={{ padding: '24px 0', textAlign: 'center', color: '#94a3b8' }}>Không có dữ liệu phù hợp để vẽ biểu đồ.</div>
-              )}
-            </div>
-          </div>
-
-          <div onMouseEnter={(e) => handlePulseHover(e, '#7c3aed')} onMouseLeave={handlePulseLeave} style={{ ...chartCardBaseStyle, position: 'relative', overflow: 'hidden' }}>
-            <div data-pulse style={{ position: 'absolute', inset: '-2px', borderRadius: '24px', pointerEvents: 'none', boxShadow: '0 0 0 0 rgba(124,58,237,0.18)', animation: 'reportsPulse 2.4s ease-out infinite', animationPlayState: 'paused' }} />
-            <div style={{ position: 'relative' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap', marginBottom: '10px' }}>
-                <div>
-                  <h3 style={{ margin: 0, color: '#0f172a', fontSize: '18px' }}>Phân bổ giá trị theo kho</h3>
-                  <p style={{ margin: '6px 0 0', color: '#64748b', fontSize: '14px', lineHeight: 1.6 }}>Biểu đồ donut giúp nhìn nhanh tỷ trọng giá trị tồn kho giữa các kho.</p>
-                </div>
-                <div style={{ padding: '8px 10px', borderRadius: '999px', background: '#eff6ff', color: '#1d4ed8', fontSize: '12px', fontWeight: 700 }}>
-                  {warehouseChartData.length} kho
-                </div>
-              </div>
-
-              <div style={{ width: '100%', height: 280, marginTop: '8px', minWidth: 0 }}>
-                {warehouseChartData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={warehouseChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={74} outerRadius={108} paddingAngle={3} stroke="rgba(255,255,255,0.9)" strokeWidth={2}>
-                        {warehouseChartData.map((entry, index) => (
-                          <Cell key={`cell-${entry.name}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value) => `${formatCurrency(value)} đ`} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: '#94a3b8', textAlign: 'center' }}>Không có dữ liệu phù hợp để vẽ biểu đồ donut.</div>
-                )}
-              </div>
-
-              {warehouseChartData.length > 0 && (
-                <div style={{ display: 'grid', gap: '10px', marginTop: '14px' }}>
-                  {warehouseChartData.map((item) => {
-                    const total = warehouseChartData.reduce((sum, current) => sum + current.value, 0) || 1;
-                    const percent = ((item.value / total) * 100).toFixed(1);
-                    return (
-                      <div key={item.name} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderRadius: '14px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
-                        <span style={{ width: '12px', height: '12px', borderRadius: '999px', background: PIE_COLORS[warehouseChartData.indexOf(item) % PIE_COLORS.length], flexShrink: 0 }} />
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'baseline' }}>
-                            <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</span>
-                            <span style={{ fontSize: '13px', fontWeight: 800, color: '#059669' }}>{percent}%</span>
-                          </div>
-                          <div style={{ marginTop: '6px', height: '8px', borderRadius: '999px', background: '#e2e8f0', overflow: 'hidden' }}>
-                            <div style={{ width: `${percent}%`, height: '100%', borderRadius: '999px', background: PIE_COLORS[warehouseChartData.indexOf(item) % PIE_COLORS.length] }} />
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div onMouseEnter={(e) => handlePulseHover(e, '#059669')} onMouseLeave={handlePulseLeave} style={{ ...getEnterStyle(320, 18), ...chartCardBaseStyle, position: 'relative', overflow: 'hidden', marginBottom: '22px' }}>
-          <div data-pulse style={{ position: 'absolute', inset: '-2px', borderRadius: '24px', pointerEvents: 'none', boxShadow: '0 0 0 0 rgba(5,150,105,0.18)', animation: 'reportsPulse 2.4s ease-out infinite', animationPlayState: 'paused' }} />
-          <div style={{ position: 'relative' }}>
-            <div style={{ padding: '20px 22px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-              <div>
-                <h3 style={{ margin: 0, color: '#0f172a', fontSize: '18px' }}>Chi tiết báo cáo tồn kho</h3>
-                <p style={{ margin: '6px 0 0', color: '#64748b', fontSize: '14px' }}>Danh sách sản phẩm, kho và giá trị tồn hiện tại.</p>
-              </div>
-              <div style={{ fontSize: '13px', color: '#64748b' }}>{filteredData.length} bản ghi</div>
-            </div>
-
-            {error ? (
-              <div style={{ padding: '28px', textAlign: 'center', color: '#b91c1c', background: '#fef2f2' }}>{error}</div>
-            ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }}>
-                  <thead>
-                    <tr style={{ textAlign: 'left', background: '#f8fafc', color: '#475569' }}>
-                      {['SKU', 'Sản phẩm', 'Kho', 'Số lượng', 'Đơn giá', 'Thành tiền'].map((header) => (
-                        <th key={header} style={{ padding: '16px 18px', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1px solid #e2e8f0' }}>
-                          {header}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {loading ? (
-                      <tr>
-                        <td colSpan="6" style={{ padding: '34px 18px', textAlign: 'center', color: '#64748b' }}>
-                          Đang tổng hợp dữ liệu...
-                        </td>
-                      </tr>
-                    ) : filteredData.length > 0 ? (
-                      filteredData.map((item, index) => {
-                      const stockTone = getStockTone(item.on_hand_qty);
-                      return (
-                        <tr
-                          key={`${item.sku}-${index}`}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.transform = 'translateX(6px)';
-                            e.currentTarget.style.boxShadow = 'inset 4px 0 0 #2563eb';
-                            e.currentTarget.style.background = '#f8fbff';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.transform = 'translateX(0)';
-                            e.currentTarget.style.boxShadow = 'none';
-                            e.currentTarget.style.background = '#fff';
-                          }}
-                          style={{
-                            ...getRowStyle(index),
-                            borderBottom: '1px solid #eef2f7',
-                            transition: 'transform 180ms ease, background 180ms ease, box-shadow 180ms ease',
-                            background: '#fff',
-                          }}
-                        >
-                          <td style={{ padding: '16px 18px', fontWeight: 700, color: '#0f172a' }}>{item.sku}</td>
-                          <td style={{ padding: '16px 18px', color: '#1e293b' }}>{item.product_name}</td>
-                          <td style={{ padding: '16px 18px' }}>
-                            <span style={{ display: 'inline-flex', alignItems: 'center', padding: '7px 10px', borderRadius: '999px', background: '#eff6ff', color: '#2563eb', fontSize: '12px', fontWeight: 700 }}>
-                              {item.warehouse_name}
-                            </span>
-                          </td>
-                          <td style={{ padding: '16px 18px', fontWeight: 700, color: stockTone.color }}>
-                            {Number(item.on_hand_qty || 0)} {item.unit}
-                          </td>
-                          <td style={{ padding: '16px 18px', color: '#334155' }}>{formatCurrency(item.sale_price)} đ</td>
-                          <td style={{ padding: '16px 18px', color: '#059669', fontWeight: 800 }}>{formatCurrency(item.total_value)} đ</td>
-                        </tr>
-                      );
-                    })
-                    ) : (
-                      <tr>
-                        <td colSpan="6" style={{ padding: '42px 18px', textAlign: 'center', color: '#94a3b8' }}>
-                          Không tìm thấy dữ liệu phù hợp với bộ lọc hiện tại.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
+        {error ? (
+          <div style={{ padding: 24, color: '#b91c1c', background: '#fee2e2', borderRadius: 16, border: '1px solid #fecaca' }}>{error}</div>
+        ) : roleId === 1 || !roleId ? renderInventoryReport() :
+          roleId === 2 ? renderSalesReport() :
+          roleId === 3 ? renderLogisticsReport() :
+          roleId === 4 ? renderWarehouseReport() :
+          roleId === 5 ? renderFactoryReport() :
+          <div style={{ padding: 24, color: '#64748b' }}>Không có báo cáo phù hợp với vai trò của bạn.</div>
+        }
       </div>
     </div>
   );

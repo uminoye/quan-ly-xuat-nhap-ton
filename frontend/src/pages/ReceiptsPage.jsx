@@ -3,6 +3,28 @@ import ExcelJS from 'exceljs';
 import api from '../services/api';
 
 export default function ReceiptsPage() {
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const roleId = user?.role_id || 0;
+  const isAdmin = roleId === 1;
+  const isWarehouse = roleId === 4;
+  const isFactory = roleId === 5;
+  const isAuthorized = [1, 4, 5].includes(roleId);
+  // Admin: full quyền (tạo, xem, duyệt)
+  // Warehouse: chỉ tạo phiếu
+  // Factory: chỉ xem + duyệt
+  const canCreate = isAdmin || isWarehouse;
+  const canApprove = isAdmin || isFactory;
+
+  if (!isAuthorized) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', color: '#94a3b8', gap: 12 }}>
+        <i className="ri-lock-2-line" style={{ fontSize: 48, color: '#cbd5e1' }} />
+        <h2 style={{ margin: 0, color: '#334155' }}>Bạn không có quyền truy cập trang này</h2>
+        <p style={{ margin: 0, fontSize: 14 }}>Trang Phiếu Nhập Kho chỉ dành cho Admin, Kho và Nhà máy.</p>
+      </div>
+    );
+  }
+
   const [receipts, setReceipts] = useState([]);
   const [products, setProducts] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
@@ -47,14 +69,11 @@ export default function ReceiptsPage() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  const user = JSON.parse(localStorage.getItem('user'));
-  const roleId = user?.role_id || 4;
-
   const fetchData = async ({ showTableLoading = false } = {}) => {
     if (showTableLoading) setTableLoading(true);
 
     try {
-      const [recRes, prodRes, whRes] = await Promise.all([api.get('/receipts'), api.get('/products'), api.get('/warehouses')]);
+      const [recRes, prodRes, whRes] = await Promise.all([api.get('/receipts'), api.get('/products'), api.get('/warehouses/for-outbound')]);
       setReceipts(recRes.data || []);
       setProducts(prodRes.data || []);
       setWarehouses(whRes.data || []);
@@ -422,12 +441,8 @@ export default function ReceiptsPage() {
                 onMouseLeave={() => setHoveredStat(null)}
                 style={{
                   background: 'linear-gradient(180deg, rgba(255,255,255,0.98), rgba(241,245,249,0.94))',
-                  borderWidth: '1px',
-                  borderStyle: 'solid',
-                  borderColor: isHovered ? (statHoverStyles[stat.id]?.borderColor || '#e8eef5') : '#e8eef5',
-                  borderTopWidth: '4px',
-                  borderTopStyle: 'solid',
-                  borderTopColor: 'transparent',
+                  border: '1px solid ' + (isHovered ? (statHoverStyles[stat.id]?.borderColor || '#e8eef5') : '#e8eef5'),
+                  borderTop: '4px solid ' + (isHovered ? (statHoverStyles[stat.id]?.borderColor || '#e8eef5') : '#e8eef5'),
                   borderRadius: '18px',
                   padding: '18px 20px',
                   boxShadow: isHovered ? (statHoverStyles[stat.id]?.boxShadow || '0 18px 34px rgba(15,23,42,0.10)') : '0 10px 24px rgba(15, 23, 42, 0.04)',

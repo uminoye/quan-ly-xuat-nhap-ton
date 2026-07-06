@@ -1,170 +1,23 @@
-import { useEffect, useMemo, useState } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import api from '../services/api';
-import { getDashboardStats } from '../services/reportService';
-import { getImports } from '../services/receiptService';
-import { getExports } from '../services/outboundService';
+import { useEffect, useState } from 'react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
-const statIcons = {
-  waitOutbound: (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ width: '22px', height: '22px' }}>
-      <path d="M4 8h16l-1.2 6.5A2 2 0 0 1 16.83 16H7.17a2 2 0 0 1-1.97-1.5L4 8Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-      <path d="M7 4h2l1 4M12 4h2l1 4M17 4h2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  ),
-  lowStock: (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ width: '22px', height: '22px' }}>
-      <path d="m10.29 4.86-7.43 12.8A2 2 0 0 0 4.58 21h14.84a2 2 0 0 0 1.72-3.34l-7.43-12.8a2 2 0 0 0-3.44 0Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-      <path d="M12 9v4" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
-      <path d="M12 17h.01" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-    </svg>
-  ),
-  product: (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ width: '22px', height: '22px' }}>
-      <path d="M4 7.5 12 4l8 3.5-8 3.5L4 7.5Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-      <path d="M4 7.5V16.5L12 20l8-3.5V7.5" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-      <path d="M12 11v9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  ),
-  stock: (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ width: '22px', height: '22px' }}>
-      <path d="M5 8.5 12 5l7 3.5-7 3.5-7-3.5Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-      <path d="M5 8.5V15.5L12 19l7-3.5V8.5" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-      <path d="M9 10.5v7M15 10.5v7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  ),
-};
-
+const fmtNum = (v) => new Intl.NumberFormat('vi-VN').format(Number(v || 0));
 const PIE_COLORS = ['#2563eb', '#0ea5e9', '#10b981', '#7c3aed', '#f59e0b', '#ef4444'];
-const formatNumber = (value) => new Intl.NumberFormat('vi-VN').format(Number(value || 0));
-const formatDate = (value) => {
-  if (!value) return '--';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '--' : date.toLocaleDateString('vi-VN');
-};
-const formatMonthLabel = (value) => {
-  if (!value) return '--';
-  const date = new Date(`${value}-01`);
-  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('vi-VN', { month: 'short', year: 'numeric' }).format(date);
-};
 
-function parseStockBreakdown(breakdown = '') {
-  return String(breakdown)
-    .split(' | ')
-    .map((entry) => entry.trim())
-    .filter(Boolean)
-    .map((entry) => {
-      const [warehouseName, qtyText] = entry.split(': ');
-      return {
-        warehouseName: warehouseName?.trim() || '',
-        quantity: Number.parseInt(qtyText, 10) || 0,
-      };
-    })
-    .filter((entry) => entry.warehouseName);
-}
-
-function getMinStockValue(product) {
-  return Number(product?.min_stock ?? 50);
-}
-
-function isBelowMinStock(quantity, product) {
-  const minStock = getMinStockValue(product);
-  return Number(quantity || 0) > 0 && Number(quantity || 0) < minStock;
-}
-
-function StatCard({ title, value, desc, icon, tone, accent = '#2563eb', delay = 0 }) {
-  return (
-    <div
-      className="warehouse-hover-card"
-      style={{
-        background: 'rgba(255,255,255,0.98)',
-        borderRadius: 24,
-        padding: 20,
-        border: '1px solid rgba(226,232,240,0.95)',
-        boxShadow: '0 16px 36px rgba(15, 23, 42, 0.08)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 14,
-        opacity: 0,
-        transform: 'translateY(18px) scale(0.98)',
-        animation: `whFadeIn 620ms ease ${delay}ms forwards`,
-        transition: 'transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease, background 220ms ease',
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.transform = 'translateY(-5px) scale(1.01)';
-        e.currentTarget.style.boxShadow = `0 24px 54px ${accent}22`;
-        e.currentTarget.style.borderColor = `${accent}55`;
-        e.currentTarget.style.background = 'linear-gradient(180deg, #FFFDF7 0%, #FFFFFF 100%)';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.transform = 'translateY(0) scale(1)';
-        e.currentTarget.style.boxShadow = '0 16px 36px rgba(15, 23, 42, 0.08)';
-        e.currentTarget.style.borderColor = 'rgba(226,232,240,0.95)';
-        e.currentTarget.style.background = 'rgba(255,255,255,0.98)';
-      }}
-    >
-      <div style={{ width: 48, height: 48, borderRadius: 16, display: 'grid', placeItems: 'center', color: '#fff', background: tone, boxShadow: '0 10px 20px rgba(0,0,0,0.08)', transition: 'transform 220ms ease' }}>{icon}</div>
-      <div>
-        <div style={{ fontSize: 13, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{title}</div>
-        <div style={{ fontSize: 30, lineHeight: 1.1, fontWeight: 800, color: '#0F172A', marginTop: 6 }}>{value}</div>
-        {desc ? <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 6 }}>{desc}</div> : null}
-      </div>
-    </div>
-  );
-}
-
-function SectionCard({ title, subtitle, accent = '#E2E8F0', children, action, className = '', delay = 0 }) {
-  return (
-    <div
-      className={`warehouse-hover-card ${className}`.trim()}
-      style={{
-        background: 'rgba(255,255,255,0.98)',
-        borderRadius: 24,
-        border: '1px solid rgba(226,232,240,0.95)',
-        boxShadow: '0 18px 42px rgba(15, 23, 42, 0.08)',
-        padding: 20,
-        opacity: 0,
-        transform: 'translateY(18px) scale(0.98)',
-        animation: `whFadeIn 620ms ease ${delay}ms forwards`,
-        transition: 'transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease, background 220ms ease',
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.transform = 'translateY(-5px) scale(1.005)';
-        e.currentTarget.style.boxShadow = `0 26px 60px ${accent}18`;
-        e.currentTarget.style.borderColor = `${accent}44`;
-        e.currentTarget.style.background = 'linear-gradient(180deg, #FFFDF7 0%, #FFFFFF 100%)';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.transform = 'translateY(0) scale(1)';
-        e.currentTarget.style.boxShadow = '0 18px 42px rgba(15, 23, 42, 0.08)';
-        e.currentTarget.style.borderColor = 'rgba(226,232,240,0.95)';
-        e.currentTarget.style.background = 'rgba(255,255,255,0.98)';
-      }}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', paddingBottom: 12, marginBottom: 16, borderBottom: `2px solid ${accent}` }}>
-        <div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: '#0F172A' }}>{title}</div>
-          {subtitle ? <div style={{ fontSize: 13, color: '#64748B', marginTop: 4, lineHeight: 1.5 }}>{subtitle}</div> : null}
-        </div>
-        {action}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function EmptyState({ text }) {
-  return <div style={{ padding: 18, textAlign: 'center', color: '#64748B', background: '#F8FAFC', borderRadius: 16 }}>{text}</div>;
+function cardStyle(hovered, accent = '#2563eb') {
+  return {
+    background: '#fff', borderRadius: 20, padding: '18px 20px',
+    border: hovered ? `1.5px solid ${accent}55` : '1px solid #e0e7ff',
+    boxShadow: hovered ? `0 18px 44px ${accent}18` : '0 10px 30px rgba(15,23,42,0.05)',
+    transition: 'all 220ms ease', transform: hovered ? 'translateY(-5px)' : 'translateY(0)',
+  };
 }
 
 export default function WarehouseDashboardPage() {
+  const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [products, setProducts] = useState([]);
-  const [orders, setOrders] = useState([]);
-  const [imports, setImports] = useState([]);
-  const [exports, setExports] = useState([]);
-  const [dashboardStats, setDashboardStats] = useState(null);
+  const [period, setPeriod] = useState('month');
+  const [hover, setHover] = useState(null);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -173,291 +26,134 @@ export default function WarehouseDashboardPage() {
   }, []);
 
   useEffect(() => {
-    const fetchData = async () => {
+    (async () => {
       try {
-        const [prodRes, ordRes, importRes, exportRes, dashboardRes] = await Promise.all([
-          api.get('/products'),
-          api.get('/orders'),
-          getImports().catch(() => []),
-          getExports().catch(() => []),
-          getDashboardStats().catch(() => null),
-        ]);
-        setProducts(Array.isArray(prodRes.data) ? prodRes.data : []);
-        setOrders(Array.isArray(ordRes.data) ? ordRes.data : []);
-        setImports(Array.isArray(importRes) ? importRes : []);
-        setExports(Array.isArray(exportRes) ? exportRes : []);
-        setDashboardStats(dashboardRes);
-      } catch (err) {
-        setError(`Không thể tải dữ liệu kho. ${err?.response?.data?.message || err.message || ''}`.trim());
-      } finally {
-        setLoading(false);
-      }
-    };
+        const res = await fetch(`/api/reports/dashboard?period=${period}`, { headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` } });
+        const json = await res.json();
+        setData(json);
+      } catch (e) { console.error(e); }
+      finally { setLoading(false); }
+    })();
+  }, [period]);
 
-    fetchData();
-  }, []);
+  const s = data?.summary || {};
+  const whBreakdown = Array.isArray(data?.tables?.warehouse_breakdown) ? data.tables.warehouse_breakdown : [];
+  const lowStock = Array.isArray(data?.tables?.low_stock_products) ? data.tables.low_stock_products : [];
+  const recentReceipts = Array.isArray(data?.tables?.recent_receipts) ? data.tables.recent_receipts : [];
+  const recentOutbounds = Array.isArray(data?.tables?.recent_outbounds) ? data.tables.recent_outbounds : [];
+  const recData = (data?.charts?.receipts_by_day || []).map(r => ({ ...r, receipts: Number(r.receipts || 0), name: r.date }));
+  const outData = (data?.charts?.outbounds_by_day || []).map(r => ({ ...r, outbounds: Number(r.outbounds || 0), name: r.date }));
 
-  const stats = useMemo(() => {
-    const pendingOutbounds = orders.filter((o) => o.status === 'warehouse_processing' || o.status === 'pending');
-    const lowStockProducts = products
-      .filter((p) => isBelowMinStock(p.stock ?? p.total_stock ?? 0, p))
-      .sort((a, b) => Number(a.stock || a.total_stock || 0) - Number(b.stock || b.total_stock || 0));
-    const totalProductTypes = products.length;
-    const totalPhysicalItems = products.reduce((sum, p) => sum + Number(p.stock || 0), 0);
-    const avgStock = totalProductTypes ? Math.round(totalPhysicalItems / totalProductTypes) : 0;
-    const topStockProducts = [...products].sort((a, b) => Number(b.stock || 0) - Number(a.stock || 0)).slice(0, 5);
+  const stats = [
+    { key: 'stock',    label: 'Loại SP có tồn',  value: s.total_product_types || 0,        accent: '#2563eb', icon: 'ri-box-3-line' },
+    { key: 'totalQty', label: 'Tổng tồn kho',    value: fmtNum(s.total_stock),              accent: '#0ea5e9', icon: 'ri-stack-line' },
+    { key: 'lowStock', label: 'Cảnh báo tồn thấp', value: s.low_stock_count || 0,            accent: '#ef4444', icon: 'ri-alert-line' },
+    { key: 'receipts', label: 'Phiếu nhập',       value: s.total_receipts || 0,              accent: '#10b981', icon: 'ri-inbox-archive-line' },
+    { key: 'outbounds',label: 'Phiếu xuất',       value: s.total_outbounds || 0,             accent: '#7c3aed', icon: 'ri-send-plane-line' },
+    { key: 'pendingRec',label:'Chờ nhập',          value: s.pending_receipts || 0,            accent: '#f59e0b', icon: 'ri-time-line' },
+    { key: 'pendingOut',label:'Chờ xuất',          value: s.pending_outbounds || 0,           accent: '#f97316', icon: 'ri-truck-line' },
+    { key: 'completed',label: 'Hoàn tất',         value: s.completed_receipts || 0,          accent: '#059669', icon: 'ri-check-line' },
+  ];
 
-    const chartData = Array.isArray(dashboardStats?.monthly_import_export)
-      ? dashboardStats.monthly_import_export.map((item) => ({ name: formatMonthLabel(item.name), Nhập: Number(item.Nhập || 0), Xuất: Number(item.Xuất || 0) }))
-      : [];
-
-    const warehouseDistributionMap = products.reduce((acc, product) => {
-      const price = Number(product.sale_price || product.price || 0);
-      const totalQty = Number(product.total_stock ?? product.stock ?? 0);
-      const breakdownRows = parseStockBreakdown(product.stock_breakdown);
-
-      if (breakdownRows.length > 0) {
-        breakdownRows.forEach((row) => {
-          const name = row.warehouseName || 'Không xác định';
-          const quantity = Number(row.quantity || 0);
-          if (!acc[name]) acc[name] = { name, total_quantity: 0, value: 0, low_stock_products: [] };
-          acc[name].total_quantity += quantity;
-          acc[name].value += quantity * price;
-          if (isBelowMinStock(quantity, product)) {
-            acc[name].low_stock_products.push({
-              id: `${product.id}-${name}`,
-              sku: product.sku,
-              name: product.name,
-              stock: quantity,
-              unit: product.unit,
-              min_stock: Number(product.min_stock || 50),
-            });
-          }
-        });
-        return acc;
-      }
-
-      const fallbackName = 'Không xác định';
-      if (!acc[fallbackName]) acc[fallbackName] = { name: fallbackName, total_quantity: 0, value: 0, low_stock_products: [] };
-      acc[fallbackName].total_quantity += totalQty;
-      acc[fallbackName].value += totalQty * price;
-      if (isBelowMinStock(totalQty, product)) {
-        acc[fallbackName].low_stock_products.push({
-          id: `${product.id}-${fallbackName}`,
-          sku: product.sku,
-          name: product.name,
-          stock: totalQty,
-          unit: product.unit,
-          min_stock: Number(product.min_stock || 50),
-        });
-      }
-      return acc;
-    }, {});
-
-    const warehouseDistribution = Object.values(warehouseDistributionMap).sort((a, b) => b.value - a.value);
-    const totalWarehouseValue = warehouseDistribution.reduce((sum, item) => sum + Number(item.value || 0), 0);
-    const warehouseLowStockMap = warehouseDistribution.reduce((acc, warehouse) => {
-      acc[warehouse.name] = (warehouse.low_stock_products || []).sort((a, b) => a.stock - b.stock);
-      return acc;
-    }, {});
-
-    return { pendingOutbounds, lowStockProducts, totalProductTypes, totalPhysicalItems, avgStock, topStockProducts, chartData, warehouseDistribution, totalWarehouseValue, warehouseLowStockMap };
-  }, [dashboardStats, orders, products]);
-
-  if (loading) return <div style={{ padding: 24, color: '#64748B' }}>Đang nạp dữ liệu kho...</div>;
-  if (error) return <div style={{ padding: 24, color: '#B91C1C', background: '#FEF2F2', borderRadius: 16 }}>{error}</div>;
+  if (loading) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', color: '#94a3b8' }}>
+      <i className="ri-loader-4-line" style={{ fontSize: 28, marginRight: 12, animation: 'spin 1s linear infinite' }} />Đang tải...
+    </div>
+  );
 
   return (
-    <div style={{ minHeight: '100vh', padding: 24, background: 'radial-gradient(circle at top left, rgba(59,130,246,0.12), transparent 28%), radial-gradient(circle at top right, rgba(16,185,129,0.12), transparent 24%), linear-gradient(180deg, #FFF7ED 0%, #F8FAFC 28%, #EEF4FB 100%)' }}>
-      <style>{`
-        @keyframes whFadeIn {
-          from { opacity: 0; transform: translateY(18px) scale(0.98); }
-          to { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        @keyframes whPageFadeIn {
-          from { opacity: 0; transform: scale(0.985); }
-          to { opacity: 1; transform: scale(1); }
-        }
-      `}</style>
-      <div style={{ maxWidth: 1440, margin: '0 auto', opacity: mounted ? 1 : 0, transform: mounted ? 'scale(1)' : 'scale(0.985)', animation: 'whPageFadeIn 520ms ease forwards' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 20, flexWrap: 'wrap', marginBottom: 20 }}>
-          <div>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 999, background: '#ECFDF5', color: '#059669', fontWeight: 700, fontSize: 12, marginBottom: 10 }}>
-              <span style={{ width: 8, height: 8, borderRadius: 999, background: '#10B981' }} />
-              Dashboard Kho
+    <div style={{ padding: 20, minHeight: '100vh', background: 'linear-gradient(160deg, #f0fdf4, #f0f9ff 40%, #fafbff)', opacity: mounted ? 1 : 0, transition: 'opacity 320ms' }}>
+      <style>{`@keyframes spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }`}</style>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 18 }}>
+        <div>
+          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, color: '#0f172a' }}>Dashboard Kho</h1>
+          <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: 13 }}>{data?.period || 'Tất cả'}</p>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {['day', 'week', 'month', 'quarter'].map(p => (
+            <button key={p} onClick={() => setPeriod(p)}
+              style={{ padding: '8px 14px', borderRadius: 10, border: '1px solid #dbe3ee', background: period === p ? '#2563eb' : '#fff', color: period === p ? '#fff' : '#475569', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>
+              {p === 'day' ? 'Ngày' : p === 'week' ? 'Tuần' : p === 'month' ? 'Tháng' : 'Quý'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 14, marginBottom: 18 }}>
+        {stats.map(st => (
+          <div key={st.key} onMouseEnter={() => setHover(st.key)} onMouseLeave={() => setHover(null)} style={cardStyle(hover === st.key, st.accent)}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+              <div style={{ width: 38, height: 38, borderRadius: 12, background: st.accent, color: '#fff', display: 'grid', placeItems: 'center', fontSize: 18 }}>
+                <i className={st.icon} />
+              </div>
+              <span style={{ fontSize: 12, color: '#64748b', fontWeight: 700 }}>{st.label}</span>
             </div>
-            <h2 style={{ margin: 0, fontSize: 32, color: '#0F172A', letterSpacing: '-0.03em' }}>Tổng quan kho hàng</h2>
-            <p style={{ color: '#64748B', margin: '8px 0 0', maxWidth: 760 }}>Một màn hình gọn gàng, ưu tiên thông tin quan trọng trước: đơn chờ xuất, tồn kho thấp, phân bổ giá trị và các thống kê cần hành động ngay.</p>
+            <div style={{ fontSize: 26, fontWeight: 800, color: '#0f172a' }}>{st.value}</div>
           </div>
-          <div style={{ display: 'grid', gap: 4, textAlign: 'right', background: '#fff', border: '1px solid #E2E8F0', borderRadius: 18, padding: '12px 14px', boxShadow: '0 10px 24px rgba(15,23,42,0.06)' }}>
-            <span style={{ color: '#94A3B8', fontSize: 12 }}>Dữ liệu tải từ hệ thống</span>
-            <strong style={{ color: '#0F172A' }}>{new Date().toLocaleString('vi-VN')}</strong>
+        ))}
+      </div>
+
+      {/* Charts */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 18 }}>
+        <div style={cardStyle(false, '#10b981')}>
+          <h3 style={{ margin: '0 0 14px', fontSize: 16, fontWeight: 800 }}>Nhập kho theo ngày</h3>
+          {recData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={recData}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e0e7ff" />
+                <XAxis dataKey="name" tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} />
+                <Tooltip /><Bar dataKey="receipts" fill="#10b981" radius={[8, 8, 0, 0]} /></BarChart>
+            </ResponsiveContainer>
+          ) : <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Chưa có dữ liệu</div>}
+        </div>
+        <div style={cardStyle(false, '#7c3aed')}>
+          <h3 style={{ margin: '0 0 14px', fontSize: 16, fontWeight: 800 }}>Xuất kho theo ngày</h3>
+          {outData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={outData}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e0e7ff" />
+                <XAxis dataKey="name" tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} />
+                <Tooltip /><Bar dataKey="outbounds" fill="#7c3aed" radius={[8, 8, 0, 0]} /></BarChart>
+            </ResponsiveContainer>
+          ) : <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Chưa có dữ liệu</div>}
+        </div>
+      </div>
+
+      {/* Tables */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <div style={cardStyle(false, '#ef4444')}>
+          <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 800 }}>Tồn kho thấp</h3>
+          {lowStock.length === 0 ? <div style={{ padding: 16, textAlign: 'center', color: '#94a3b8' }}>Kho đủ hàng</div> :
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead><tr style={{ fontSize: 12, color: '#94a3b8', borderBottom: '1px solid #e0e7ff' }}>
+                <th style={{ padding: '6px 0', textAlign: 'left' }}>SKU</th><th style={{ padding: '6px 0' }}>Tồn</th><th style={{ padding: '6px 0' }}>Min</th><th style={{ padding: '6px 0', textAlign: 'left' }}>Kho</th>
+              </tr></thead>
+              <tbody>{lowStock.map((p, i) => (
+                <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                  <td style={{ padding: '7px 0', fontWeight: 700, fontSize: 13 }}>{p.sku}</td>
+                  <td style={{ padding: '7px 0', color: '#ef4444', fontWeight: 800, textAlign: 'center' }}>{p.on_hand || 0}</td>
+                  <td style={{ padding: '7px 0', color: '#94a3b8', textAlign: 'center' }}>{p.min_stock}</td>
+                  <td style={{ padding: '7px 0', fontSize: 12, color: '#64748b' }}>{p.warehouse_name || '—'}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          }
+        </div>
+
+        <div style={cardStyle(false, '#2563eb')}>
+          <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 800 }}>Hoạt động gần đây</h3>
+          <div style={{ display: 'grid', gap: 6 }}>
+            {recentReceipts.length === 0 && recentOutbounds.length === 0 ? (
+              <div style={{ padding: 16, textAlign: 'center', color: '#94a3b8' }}>Chưa có hoạt động</div>
+            ) : [...recentReceipts.map(r => ({ ...r, type: 'Nhập' })), ...recentOutbounds.map(r => ({ ...r, type: 'Xuất' }))].slice(0, 8).map((act, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderRadius: 12, background: '#f8fafc', border: '1px solid #e0e7ff', fontSize: 13 }}>
+                <div>
+                  <span style={{ fontWeight: 700, color: act.type === 'Nhập' ? '#10b981' : '#7c3aed', marginRight: 8 }}>{act.type}</span>
+                  <span>{act.receipt_no || act.outbound_no || '—'}</span>
+                </div>
+                <span style={{ color: '#94a3b8', fontSize: 12 }}>{fmtDate(act.receipt_date || act.export_date)}</span>
+              </div>
+            ))}
           </div>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 16, marginBottom: 20 }}>
-          <StatCard delay={0} title="Chờ xuất kho" value={`${stats.pendingOutbounds.length} đơn`} desc="Đơn cần soạn hàng và đóng gói" icon={statIcons.waitOutbound} tone="linear-gradient(135deg, #F59E0B, #D97706)" accent="#F59E0B" />
-          <StatCard delay={70} title="Sắp cạn kho" value={`${stats.lowStockProducts.length} mã`} desc="Tồn dưới min_stock của từng sản phẩm" icon={statIcons.lowStock} tone="linear-gradient(135deg, #EF4444, #DC2626)" accent="#EF4444" />
-          <StatCard delay={140} title="Mã sản phẩm" value={stats.totalProductTypes} desc="Tổng số mặt hàng đang quản lý" icon={statIcons.product} tone="linear-gradient(135deg, #3B82F6, #2563EB)" accent="#3B82F6" />
-          <StatCard delay={210} title="Tổng tồn vật lý" value={formatNumber(stats.totalPhysicalItems)} desc={`Trung bình ${stats.avgStock} / mã`} icon={statIcons.stock} tone="linear-gradient(135deg, #10B981, #059669)" accent="#10B981" />
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1.45fr 1fr', gap: 16, marginBottom: 16, alignItems: 'stretch' }}>
-          <SectionCard delay={280} title="Biểu đồ nhập / xuất kho" subtitle="Dữ liệu đồng bộ từ báo cáo tổng hợp của Admin Dashboard" accent="#3B82F6">
-            <div style={{ display: 'grid', gridTemplateRows: 'auto 1fr', gap: 14, minHeight: 520 }}>
-              <div style={{ minHeight: 240 }}>
-                {stats.chartData.length === 0 ? (
-                  <EmptyState text="Chưa có dữ liệu biểu đồ nhập xuất từ dashboard." />
-                ) : (
-                  <ResponsiveContainer width="100%" height={240}>
-                    <BarChart data={stats.chartData} barCategoryGap={18} margin={{ top: 8, right: 6, left: -10, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                      <XAxis dataKey="name" axisLine={false} tickLine={false} />
-                      <YAxis axisLine={false} tickLine={false} width={34} />
-                      <RechartsTooltip />
-                      <Legend />
-                      <Bar dataKey="Nhập" fill="#10B981" radius={[10, 10, 0, 0]} />
-                      <Bar dataKey="Xuất" fill="#3B82F6" radius={[10, 10, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-
-              <div style={{ display: 'grid', gap: 10, alignContent: 'start' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 10, borderBottom: '1px solid #E2E8F0' }}>
-                  <strong style={{ color: '#0F172A' }}>Tổng hợp tháng gần nhất</strong>
-                  <span style={{ fontSize: 12, color: '#64748B' }}>{stats.chartData.length} tháng</span>
-                </div>
-                {stats.chartData.slice(-4).map((item) => (
-                  <div key={item.name} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 12, alignItems: 'center', padding: '10px 12px', borderRadius: 14, background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
-                    <div style={{ fontWeight: 700, color: '#0F172A' }}>{item.name}</div>
-                    <div style={{ color: '#059669', fontWeight: 800 }}>Nhập {formatNumber(item.Nhập)}</div>
-                    <div style={{ color: '#2563EB', fontWeight: 800 }}>Xuất {formatNumber(item.Xuất)}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </SectionCard>
-
-          <SectionCard
-            delay={340}
-            title="Phân bổ giá trị theo kho"
-            subtitle="Biểu đồ donut và danh sách tỷ trọng giá trị tồn kho giữa các kho"
-            accent="#8B5CF6"
-            action={<span style={{ padding: '8px 10px', borderRadius: 999, background: '#EEF2FF', color: '#4338CA', fontSize: 12, fontWeight: 700 }}>{stats.warehouseDistribution.length} kho</span>}
-          >
-            {stats.warehouseDistribution.length === 0 ? (
-              <EmptyState text="Chưa có dữ liệu phân bổ giá trị theo kho." />
-            ) : (
-              <>
-                <div style={{ display: 'grid', placeItems: 'center', padding: '6px 0 18px' }}>
-                  <div style={{ width: '100%', height: 260, maxWidth: 340 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie data={stats.warehouseDistribution} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={76} outerRadius={108} paddingAngle={2} stroke="#fff" strokeWidth={3}>
-                          {stats.warehouseDistribution.map((entry, index) => (
-                            <Cell key={entry.name} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <RechartsTooltip formatter={(value) => `${formatNumber(value)} đ`} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gap: 10 }}>
-                  {stats.warehouseDistribution.map((item, index) => {
-                    const totalValue = stats.totalWarehouseValue || 1;
-                    const percent = ((Number(item.value || 0) / totalValue) * 100).toFixed(1);
-                    const color = PIE_COLORS[index % PIE_COLORS.length];
-                    return (
-                      <div key={item.name} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 16, background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
-                        <span style={{ width: 12, height: 12, borderRadius: 999, background: color, flexShrink: 0 }} />
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline' }}>
-                            <span style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</span>
-                            <span style={{ fontSize: 13, fontWeight: 800, color: '#059669' }}>{percent}%</span>
-                          </div>
-                          <div style={{ marginTop: 6, height: 8, borderRadius: 999, background: '#E2E8F0', overflow: 'hidden' }}>
-                            <div style={{ width: `${percent}%`, height: '100%', borderRadius: 999, background: color }} />
-                          </div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: 12, color: '#64748B' }}>
-                            <span>{formatNumber(item.total_quantity)} sp</span>
-                            <strong>{formatNumber(item.value)} đ</strong>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-          </SectionCard>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'stretch', marginBottom: 16 }}>
-          <SectionCard title="Top tồn kho hiện tại" subtitle="Những sản phẩm đang chiếm nhiều diện tích kho nhất" accent="#8B5CF6" action={<span style={{ fontSize: 12, color: '#64748B' }}>5 sản phẩm</span>}>
-            {stats.topStockProducts.length === 0 ? (
-              <EmptyState text="Chưa có dữ liệu sản phẩm." />
-            ) : (
-              <div style={{ display: 'grid', gap: 10 }}>
-                {stats.topStockProducts.map((product, index) => {
-                  const max = stats.topStockProducts[0]?.stock || 1;
-                  const percent = Math.max(8, Math.round((Number(product.stock || 0) / max) * 100));
-                  return (
-                    <div key={product.id || product.sku || index} style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 16, padding: 14 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
-                        <div>
-                          <div style={{ fontWeight: 700, color: '#0F172A' }}>{index + 1}. {product.name || 'Không tên'}</div>
-                          <div style={{ fontSize: 12, color: '#64748B', marginTop: 4 }}>{product.sku || '—'}</div>
-                        </div>
-                        <strong style={{ color: '#2563EB' }}>{formatNumber(product.stock)}</strong>
-                      </div>
-                      <div style={{ height: 8, borderRadius: 999, background: '#E2E8F0', overflow: 'hidden' }}>
-                        <div style={{ width: `${percent}%`, height: '100%', borderRadius: 999, background: 'linear-gradient(90deg, #3B82F6, #60A5FA)' }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </SectionCard>
-
-          <SectionCard title="Cảnh báo tồn kho thấp" subtitle="Các mặt hàng cần nhập bổ sung sớm theo từng kho" accent="#EF4444" action={<span style={{ fontSize: 12, color: '#64748B' }}>theo kho</span>}>
-            {stats.warehouseDistribution.length === 0 ? (
-              <EmptyState text="Kho đang đủ hàng, chưa có cảnh báo tồn thấp." />
-            ) : (
-              <div style={{ display: 'grid', gap: 14, maxHeight: 540, overflow: 'auto', paddingRight: 4 }}>
-                {stats.warehouseDistribution.map((warehouse) => {
-                  const productsLow = stats.warehouseLowStockMap[warehouse.name] || [];
-                  return (
-                    <div key={warehouse.name} style={{ background: '#FFF7F7', border: '1px solid #FECACA', borderRadius: 18, padding: 14 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                        <div style={{ fontWeight: 800, color: '#0F172A' }}>{warehouse.name}</div>
-                        <div style={{ fontSize: 12, color: '#B91C1C', fontWeight: 700 }}>{productsLow.length} sản phẩm</div>
-                      </div>
-
-                      {productsLow.length === 0 ? (
-                        <div style={{ padding: '10px 12px', borderRadius: 14, background: '#FFFFFF', color: '#64748B', fontSize: 13 }}>Không có sản phẩm dưới ngưỡng cảnh báo tại kho này.</div>
-                      ) : (
-                        <div style={{ display: 'grid', gap: 8 }}>
-                          {productsLow.slice(0, 6).map((product) => (
-                            <div key={product.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 14, background: '#FFFFFF', border: '1px solid #FCA5A5' }}>
-                              <div>
-                                <div style={{ fontWeight: 700, color: '#0F172A' }}>{product.name || 'Không tên'}</div>
-                                <div style={{ fontSize: 12, color: '#64748B', marginTop: 4 }}>{product.sku || '—'} {product.unit ? `• ${product.unit}` : ''}</div>
-                              </div>
-                              <div style={{ padding: '8px 10px', borderRadius: 12, background: '#FFF1F2', color: '#B91C1C', fontWeight: 800, border: '1px solid #FECACA', whiteSpace: 'nowrap' }}>{formatNumber(product.stock)} / {formatNumber(getMinStockValue(product))}</div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </SectionCard>
         </div>
       </div>
     </div>

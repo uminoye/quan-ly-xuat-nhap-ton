@@ -12,6 +12,15 @@ const PREFIXES = {
   outbound: 'PXK',
   product:  'SP',
   customer: 'KH',
+  shipping: 'GHN',
+  GHN:      'GHN',
+  GR:       'GR',
+  GHT:      'GHT',
+  VTP:      'VTP',
+  PNH:      'PNH',
+  PBH:      'PBH',
+  CLS:      'CLS',
+  CLC:      'CLC',
 };
 
 const generateCode = async (type, dbClient) => {

@@ -1,5 +1,5 @@
 const db = require('../config/database');
-const generateCode = require('../utils/autoCode');
+const { generateCode } = require('../utils/autoCode');
 
 const getAllOutbounds = async (req, res) => {
     try {
@@ -91,11 +91,11 @@ const getPendingOutboundRequests = async (req, res) => {
             LEFT JOIN customers c ON s.customer_id = c.id
             LEFT JOIN sales_order_items soi ON s.id = soi.order_id
             LEFT JOIN products p ON soi.product_id = p.id
-            WHERE s.status IN ('warehouse_processing', 'shipping', 'completed', 'returned', 'canceled')
+            WHERE s.status IN ('warehouse_processing', 'shipping', 'completed', 'returned', 'canceled', 'waiting_sales', 'customer_rejected', 'return_pending')
                 OR EXISTS (
                     SELECT 1 FROM delivery_requests d
                     WHERE d.order_id = s.id
-                        AND COALESCE(d.status, '') IN ('warehouse_processing', 'shipping', 'completed', 'returned', 'canceled')
+                        AND COALESCE(d.status, '') IN ('warehouse_processing', 'shipping', 'completed', 'waiting_sales', 'customer_rejected', 'return_pending')
                 )
             GROUP BY s.id, c.id
             ORDER BY s.updated_at DESC, s.id DESC
@@ -150,9 +150,11 @@ const createOutboundFromPending = async (req, res) => {
                 `INSERT INTO stock_outbound_note_items (outbound_note_id, product_id, quantity) VALUES ($1, $2, $3)`,
                 [outboundId, item.product_id, item.quantity]
             );
-            await client.query(
-                `UPDATE inventory_balances SET on_hand_qty = on_hand_qty - $1, updated_at = CURRENT_TIMESTAMP WHERE warehouse_id = $2 AND product_id = $3`,
-                [item.quantity, warehouse_id, item.product_id]
+            await client.query(`INSERT INTO inventory_balances (warehouse_id, product_id, on_hand_qty)
+                VALUES ($1, $2, 0)
+                ON CONFLICT (warehouse_id, product_id) DO UPDATE
+                SET on_hand_qty = inventory_balances.on_hand_qty - $3, updated_at = CURRENT_TIMESTAMP`,
+                [warehouse_id, item.product_id, item.quantity]
             );
             await client.query(
                 `INSERT INTO inventory_transactions (warehouse_id, product_id, transaction_type, quantity, reference_type, reference_id)
@@ -172,20 +174,35 @@ const createOutboundFromPending = async (req, res) => {
 };
 
 const respondOutbound = async (req, res) => {
+    const client = await db.pool.connect();
     try {
         const { order_id } = req.params;
-        const { action, reason, expected_date } = req.body;
-        const newStatus = action === 'reject' ? 'rejected' : 'delayed';
-        const notePrefix = action === 'reject' ? '[KHO TU CHOI]' : '[KHO HEN GIAO]';
-        const finalNote = `${notePrefix}: ${reason}`;
-        await db.run(`UPDATE sales_orders SET status = $1, note = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3`, [newStatus, finalNote, order_id]);
-        await db.run(
-            `INSERT INTO delivery_requests (order_id, status, logistics_note, warehouse_note, updated_at) VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)`,
-            [order_id, newStatus, reason || null, expected_date || null]
-        );
-        res.status(200).json({ message: 'Da gui phan hoi tu Kho thanh cong!' });
+        const { action, reason, warehouse_action } = req.body;
+        const userId = req.user?.id || null;
+
+        if (action === 'reject') {
+            // Kho từ chối → gửi về Sales với hướng xử lý
+            await client.query('BEGIN');
+            await client.query(
+                `UPDATE sales_orders SET status = 'waiting_sales', updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+                [order_id]
+            );
+            await client.query(
+                `INSERT INTO delivery_requests (order_id, handled_by, status, logistics_note, warehouse_note)
+                 VALUES ($1, $2, 'waiting_sales', $3, $4)`,
+                [order_id, userId, warehouse_action || null, reason || null]
+            );
+            await client.query('COMMIT');
+            res.status(200).json({ message: 'Da tu choi xuat hang. Don cho Sales xu ly.' });
+        } else {
+            // Chấp nhận → giữ nguyên
+            res.status(200).json({ message: 'Da tiep nhan don hang.' });
+        }
     } catch (err) {
+        await client.query('ROLLBACK');
         res.status(500).json({ message: 'Loi cap nhat phan hoi' });
+    } finally {
+        client.release();
     }
 };
 
@@ -225,8 +242,14 @@ const createOutbound = async (req, res) => {
         for (const item of items) {
             await client.query(`INSERT INTO stock_outbound_note_items (outbound_note_id, product_id, quantity) VALUES ($1, $2, $3)`,
                 [outboundId, item.product_id, item.quantity]);
-            await client.query(`UPDATE inventory_balances SET on_hand_qty = on_hand_qty - $1, updated_at = CURRENT_TIMESTAMP WHERE warehouse_id = $2 AND product_id = $3`,
-                [item.quantity, warehouse_id, item.product_id]);
+
+            // Neu chua co record ton kho, tao moi; neu co thi tru ton
+            await client.query(`INSERT INTO inventory_balances (warehouse_id, product_id, on_hand_qty)
+                VALUES ($1, $2, 0)
+                ON CONFLICT (warehouse_id, product_id) DO UPDATE
+                SET on_hand_qty = inventory_balances.on_hand_qty - $3, updated_at = CURRENT_TIMESTAMP`,
+                [warehouse_id, item.product_id, item.quantity]);
+
             await client.query(`INSERT INTO inventory_transactions (warehouse_id, product_id, transaction_type, quantity, reference_type, reference_id) VALUES ($1, $2, 'OUT', $3, 'stock_outbound', $4)`,
                 [warehouse_id, item.product_id, item.quantity, outboundId]);
         }
@@ -245,7 +268,23 @@ const createOutboundFallback = async (_req, res) => {
     res.status(501).json({ message: 'Chua ho tro' });
 };
 
+const getWarehouseStock = async (req, res) => {
+    try {
+        const { warehouse_id } = req.params;
+        const rows = await db.getAll(`
+            SELECT ib.product_id, ib.on_hand_qty, p.name AS product_name, p.sku
+            FROM inventory_balances ib
+            JOIN products p ON p.id = ib.product_id
+            WHERE ib.warehouse_id = $1 AND ib.on_hand_qty > 0
+            ORDER BY p.name ASC
+        `, [warehouse_id]);
+        res.status(200).json(rows);
+    } catch (err) {
+        res.status(500).json({ message: 'Loi lay ton kho', error: err.message });
+    }
+};
+
 module.exports = {
     getAllOutbounds, getPendingOutboundRequests, createOutbound,
-    createOutboundFromPending, respondOutbound, createOutboundFallback
+    createOutboundFromPending, respondOutbound, createOutboundFallback, getWarehouseStock
 };

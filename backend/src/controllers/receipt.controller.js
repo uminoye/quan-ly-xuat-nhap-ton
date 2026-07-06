@@ -36,7 +36,7 @@ const getAllReceipts = async (req, res) => {
     }
 };
 
-const generateCode = require('../utils/autoCode');
+const { generateCode } = require('../utils/autoCode');
 
 const createRequest = async (req, res) => {
     const client = await db.pool.connect();
@@ -50,7 +50,7 @@ const createRequest = async (req, res) => {
         if (isNaN(cleanWarehouseId)) return res.status(400).json({ message: 'Kho khong hop le!' });
 
         await client.query('BEGIN');
-        const receipt_no = await generateCode('receipt');
+        const receipt_no = await generateCode('receipt', client);
         await client.query(
             `INSERT INTO production_receipts (receipt_no, warehouse_id, receipt_date, created_by, note, status)
              VALUES ($1, $2, $3, $4, $5, 'pending')`,
