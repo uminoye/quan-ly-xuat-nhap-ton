@@ -4,14 +4,14 @@ import 'remixicon/fonts/remixicon.css';
 import api from '../services/api';
 
 const demoAccounts = [
-  { email: 'admin@congty.com',     password: '123456', role: 'Admin',     accent: '#dbeafe', border: '#93c5fd', text: '#1d4ed8' },
-  { email: 'sale@congty.com',      password: '123456', role: 'Sales',     accent: '#e0f2fe', border: '#7dd3fc', text: '#0369a1' },
-  { email: 'kho@congty.com',       password: '123456', role: 'Kho',       accent: '#e0e7ff', border: '#a5b4fc', text: '#4338ca' },
-  { email: 'logistics@congty.com', password: '123456', role: 'Logistics', accent: '#cffafe', border: '#67e8f9', text: '#0e7490' },
-  { email: 'nhamay@congty.com',    password: '123456', role: 'Nhà máy',   accent: '#ede9fe', border: '#c4b5fd', text: '#6d28d9' },
+  { email: 'admin@congty.com',     password: '123456', role: 'Admin',     accent: '#dbeafe', border: '#93c5fd', text: '#1d4ed8', icon: 'ri-shield-user-line'  },
+  { email: 'sale@congty.com',      password: '123456', role: 'Sales',     accent: '#fee2e2', border: '#fca5a5', text: '#b91c1c', icon: 'ri-shopping-cart-line' },
+  { email: 'kho@congty.com',       password: '123456', role: 'Kho',       accent: '#fef3c7', border: '#fcd34d', text: '#b45309', icon: 'ri-archive-line'       },
+  { email: 'logistics@congty.com', password: '123456', role: 'Logistics', accent: '#dcfce7', border: '#86efac', text: '#15803d', icon: 'ri-truck-line'         },
+  { email: 'nhamay@congty.com',    password: '123456', role: 'Nhà máy',   accent: '#ede9fe', border: '#c4b5fd', text: '#6d28d9', icon: 'ri-building-line'      },
 ];
 
-const logoSrc = 'https://cdn.haitrieu.com/wp-content/uploads/2023/03/Logo-Truong-Cao-dang-nghe-Cong-nghiep-Cao-Dong-An.png';
+const logoSrc = 'https://cdn.haitrieu.com/wp-content/uploads/2023/03/Logo-Truong-Cao-dang-nghe-Cong-nghe-cao-Dong-An.png';
 
 export default function LoginPage() {
   const [email, setEmail]           = useState('');
@@ -45,13 +45,44 @@ export default function LoginPage() {
         .login-eye:hover { color: #1e40af; background: #eff6ff; }
         .login-left-deco { position: absolute; border-radius: 50%; pointer-events: none; }
 
-        @media (max-width: 900px) {
+        @media (max-width: 1280px) {
+          .login-left  { padding: 32px 36px !important; }
+          .login-right { padding: 32px 28px !important; }
+          .login-hero-title { font-size: 42px !important; }
+          .login-hero { margin-top: 56px !important; }
+          .login-stats-grid { margin-top: 32px !important; }
+        }
+        @media (max-width: 1100px) {
+          .login-hero-title { font-size: 38px !important; }
+          .login-stat-val   { font-size: 20px !important; }
+          .login-stat-card  { padding: 14px 14px !important; }
+        }
+        @media (max-width: 980px) {
+          .login-left  { padding: 28px 28px !important; }
+          .login-hero  { display: none !important; }
+          .login-testimonial { display: none !important; }
+          .login-stats-grid { margin-top: auto !important; }
+        }
+        @media (max-width: 768px) {
           .login-left  { display: none !important; }
-          .login-right { flex: 1 1 100% !important; }
+          .login-right { flex: 1 1 100% !important; padding: 28px 22px !important; }
         }
         @media (max-width: 480px) {
-          .login-right { padding: 24px 18px !important; }
-          .login-form-wrap { max-width: 100% !important; }
+          .login-right        { padding: 22px 18px !important; }
+          .login-form-wrap    { max-width: 100% !important; }
+          .login-form-title   { font-size: 26px !important; }
+          .login-form-sub     { font-size: 14px !important; }
+          .login-input        { height: 46px !important; font-size: 13.5px !important; }
+          .login-submit       { height: 48px !important; font-size: 14.5px !important; }
+          .login-demo-email   { font-size: 11px !important; }
+        }
+        @media (max-width: 360px) {
+          .login-right        { padding: 18px 14px !important; }
+          .login-form-title   { font-size: 23px !important; }
+        }
+        @media (max-height: 500px) and (orientation: landscape) {
+          .login-left-deco:nth-of-type(1),
+          .login-left-deco:nth-of-type(3) { display: none !important; }
         }
       `}</style>
 
@@ -78,8 +109,8 @@ export default function LoginPage() {
           </div>
 
           {/* Hero */}
-          <div style={S.hero}>
-            <h1 style={S.heroTitle}>
+          <div className="login-hero" style={S.hero}>
+            <h1 className="login-hero-title" style={S.heroTitle}>
               Quản Lý<br />
               <span style={S.heroAccent}>Xuất — Nhập — Tồn</span>
             </h1>
@@ -90,22 +121,22 @@ export default function LoginPage() {
           </div>
 
           {/* Stats */}
-          <div style={S.statsGrid}>
+          <div className="login-stats-grid" style={S.statsGrid}>
             {[
               { icon: 'ri-shield-check-line',  val: '99.9%',   lbl: 'Độ ổn định' },
               { icon: 'ri-user-settings-line', val: '5 cấp',   lbl: 'Phân quyền' },
               { icon: 'ri-database-2-line',    val: 'Realtime', lbl: 'Cập nhật'  },
             ].map(s => (
-              <div key={s.val} style={S.statCard}>
+              <div key={s.val} className="login-stat-card" style={S.statCard}>
                 <div style={S.statIcon}><i className={s.icon} /></div>
-                <div style={S.statVal}>{s.val}</div>
+                <div className="login-stat-val" style={S.statVal}>{s.val}</div>
                 <div style={S.statLbl}>{s.lbl}</div>
               </div>
             ))}
           </div>
 
           {/* Testimonial */}
-          <div style={S.testi}>
+          <div className="login-testimonial" style={S.testi}>
             <div style={S.testiAvatar}><i className="ri-user-smile-line" style={{ fontSize: 22 }} /></div>
             <div style={S.testiBody}>
               <div style={S.testiHead}>
@@ -129,8 +160,8 @@ export default function LoginPage() {
           <div className="login-form-wrap" style={S.formWrap}>
 
             <div style={S.formHead}>
-              <h2 style={S.formTitle}>Chào mừng trở lại! 👋</h2>
-              <p style={S.formSub}>Đăng nhập để tiếp tục quản lý kho hàng</p>
+              <h2 className="login-form-title" style={S.formTitle}>Chào mừng trở lại! 👋</h2>
+              <p className="login-form-sub" style={S.formSub}>Đăng nhập để tiếp tục quản lý kho hàng</p>
             </div>
 
             <form onSubmit={handleLogin} style={S.form}>
@@ -140,7 +171,7 @@ export default function LoginPage() {
                 <div style={S.inputWrap}>
                   <i className="ri-mail-line" style={S.inputIcon} />
                   <input
-                    className="login-input"
+                    className="login-input login-input"
                     type="email"
                     value={email}
                     onChange={e => setEmail(e.target.value)}
@@ -204,8 +235,11 @@ export default function LoginPage() {
                   onClick={() => { setEmail(a.email); setPassword(a.password); }}
                   style={{ ...S.demoBtn, background: a.accent, borderColor: a.border }}
                 >
-                  <span style={{ color: a.text, fontWeight: 700, fontSize: 14 }}>{a.role}</span>
-                  <span style={S.demoEmail}>{a.email}</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                    <i className={a.icon} style={{ color: a.text, fontSize: 16 }} />
+                    <span style={{ color: a.text, fontWeight: 700, fontSize: 14 }}>{a.role}</span>
+                  </span>
+                  <span className="login-demo-email" style={S.demoEmail}>{a.email}</span>
                 </button>
               ))}
             </div>
