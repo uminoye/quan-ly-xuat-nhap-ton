@@ -65,7 +65,7 @@ const getAdminDashboard = async (req, res) => {
                 FROM sales_orders o
                 JOIN sales_order_items oi ON oi.order_id = o.id
                 LEFT JOIN products p ON p.id = oi.product_id
-                WHERE o.status = 'completed' ${soDateSql.replace('created_at', 'o.created_at')}
+                WHERE o.status = 'completed' ${soDateSql}
                 GROUP BY TO_CHAR(COALESCE(o.actual_delivery_date, o.updated_at, o.created_at), 'YYYY-MM-DD')
                 ORDER BY date ASC
             `),
@@ -95,7 +95,7 @@ const getAdminDashboard = async (req, res) => {
                 SELECT status, COUNT(*) as count,
                        COALESCE(SUM((SELECT SUM(quantity * COALESCE(unit_price, 0)) FROM sales_order_items WHERE order_id = sales_orders.id)), 0) as revenue
                 FROM sales_orders
-                WHERE 1=1 ${soDateSql}
+                WHERE 1=1 ${dateSql}
                 GROUP BY status
                 ORDER BY count DESC
             `),
