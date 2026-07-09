@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import api from '../services/api';
 import { colors, spacing, radius, shadows, card, btn, input, badge, pageWrap } from '../styles/theme';
+import { exportListToExcel } from '../utils/exportList';
 
 // ---- SVG Icons ----
 const IconSearch = () => (
@@ -458,6 +459,41 @@ export default function ProductsPage() {
           </div>
 
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }} className="prod-header-btns">
+            <button
+              onClick={async () => {
+                const rows = filteredProducts.map(p => [
+                  p.sku || '',
+                  p.name || '',
+                  p.category || '',
+                  p.unit || '',
+                  Number(p.sale_price || 0),
+                  Number(p.total_stock || 0),
+                  Number(p.min_stock || 0),
+                  p.stock_status || '',
+                ]);
+                await exportListToExcel({
+                  filename: 'DanhSachSanPham',
+                  sheetName: 'SanPham',
+                  title: 'DANH SÁCH SẢN PHẨM',
+                  headers: ['SKU', 'Tên sản phẩm', 'Danh mục', 'Đơn vị', 'Đơn giá (VND)', 'Tồn kho', 'Tồn tối thiểu', 'Trạng thái'],
+                  rows,
+                  colWidths: [16, 36, 14, 10, 16, 12, 14, 14],
+                  numberCols: [
+                    { col: 5, format: '#,##0 "đ"' },
+                    { col: 6, format: '#,##0' },
+                    { col: 7, format: '#,##0' },
+                  ],
+                });
+              }}
+              style={{
+                ...btn('secondary', 'md'),
+                borderColor: '#86efac', color: '#15803d',
+                background: 'linear-gradient(135deg, #dcfce7, #bbf7d0)',
+              }}
+            >
+              <i className="ri-file-excel-2-line" style={{ fontSize: 16 }} />
+              Xuất Excel
+            </button>
             {canEdit && (
               <>
                 <button

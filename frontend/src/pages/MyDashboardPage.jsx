@@ -70,10 +70,10 @@ export default function SalesDashboardPage() {
           <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: 13 }}>{data?.period || 'Tất cả'}</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          {['day', 'week', 'month', 'quarter'].map(p => (
+          {['day', 'month', 'quarter'].map(p => (
             <button key={p} onClick={() => setPeriod(p)}
               style={{ padding: '8px 14px', borderRadius: 10, border: '1px solid #dbe3ee', background: period === p ? BLUE : '#fff', color: period === p ? '#fff' : '#475569', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>
-              {p === 'day' ? 'Ngày' : p === 'week' ? 'Tuần' : p === 'month' ? 'Tháng' : 'Quý'}
+              {p === 'day' ? 'Ngày' : p === 'month' ? 'Tháng' : 'Quý'}
             </button>
           ))}
         </div>

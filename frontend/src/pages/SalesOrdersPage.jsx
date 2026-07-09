@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import 'remixicon/fonts/remixicon.css';
 import api from '../services/api';
 import { formatOrderItems, normalizeOrderItems } from '../utils/orderItems';
+import { exportListToExcel } from '../utils/exportList';
 
 const statusConfig = {
     pending:              { label: 'Đang chờ duyệt',        tone: 'warning' },
@@ -30,6 +31,14 @@ const toneStyles = {
 };
 
 const fmt = new Intl.NumberFormat('vi-VN').format;
+const fmtDate = (d) => {
+    if (!d) return '';
+    try {
+        const dt = new Date(d);
+        if (isNaN(dt.getTime())) return '';
+        return dt.toLocaleDateString('vi-VN');
+    } catch { return ''; }
+};
 
 const calcTotal = (order) => {
     const items = Array.isArray(order?.items) ? order.items : normalizeOrderItems(order);
@@ -420,18 +429,54 @@ export default function SalesOrdersPage() {
                             Theo dõi, chỉnh sửa và xử lý đơn hàng trong một giao diện gọn gàng.
                         </p>
                     </div>
-                    <button type="button" onClick={openAdd} style={{
-                        padding: isMobile ? '11px 16px' : '12px 18px',
-                        borderRadius: 14, border: 'none',
-                        background: 'linear-gradient(135deg, #2563eb, #60a5fa)',
-                        color: '#fff', fontWeight: 800, cursor: 'pointer', fontSize: isMobile ? 13 : 14,
-                        boxShadow: '0 14px 28px rgba(37,99,235,0.22)',
-                        transition: 'transform 160ms ease, box-shadow 160ms ease',
-                        display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0
-                    }}>
-                        <i className="ri-add-line" style={{ fontSize: 16 }} />
-                        Tạo đơn hàng
-                    </button>
+                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                        <button type="button" onClick={async () => {
+                            const rows = filteredOrders.map(o => {
+                                const total = calcTotal(o);
+                                return [
+                                    o.order_no || '',
+                                    o.customer_name || '',
+                                    fmtDate(o.order_date),
+                                    fmtDate(o.expected_delivery_date),
+                                    fmtDate(o.actual_delivery_date),
+                                    statusConfig[o.status]?.label || o.status || '',
+                                    (o.items?.length ?? normalizeOrderItems(o).length),
+                                    total,
+                                ];
+                            });
+                            await exportListToExcel({
+                                filename: 'DanhSachDonHang',
+                                sheetName: 'DonHang',
+                                title: 'DANH SÁCH ĐƠN HÀNG',
+                                headers: ['Mã đơn', 'Khách hàng', 'Ngày đặt', 'Ngày giao dự kiến', 'Ngày giao thực tế', 'Trạng thái', 'Số SP', 'Tổng tiền (VND)'],
+                                rows,
+                                colWidths: [18, 28, 14, 16, 16, 18, 8, 18],
+                                numberCols: [{ col: 8, format: '#,##0 "đ"' }],
+                            });
+                        }} style={{
+                            padding: isMobile ? '11px 16px' : '12px 18px',
+                            borderRadius: 14, border: '1px solid #d1fae5',
+                            background: 'linear-gradient(135deg, #10b981, #34d399)',
+                            color: '#fff', fontWeight: 800, cursor: 'pointer', fontSize: isMobile ? 13 : 14,
+                            boxShadow: '0 14px 28px rgba(16,185,129,0.22)',
+                            display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0
+                        }}>
+                            <i className="ri-file-excel-2-line" style={{ fontSize: 16 }} />
+                            Xuất Excel
+                        </button>
+                        <button type="button" onClick={openAdd} style={{
+                            padding: isMobile ? '11px 16px' : '12px 18px',
+                            borderRadius: 14, border: 'none',
+                            background: 'linear-gradient(135deg, #2563eb, #60a5fa)',
+                            color: '#fff', fontWeight: 800, cursor: 'pointer', fontSize: isMobile ? 13 : 14,
+                            boxShadow: '0 14px 28px rgba(37,99,235,0.22)',
+                            transition: 'transform 160ms ease, box-shadow 160ms ease',
+                            display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0
+                        }}>
+                            <i className="ri-add-line" style={{ fontSize: 16 }} />
+                            Tạo đơn hàng
+                        </button>
+                    </div>
                 </div>
 
                 {/* ── Stats ── */}

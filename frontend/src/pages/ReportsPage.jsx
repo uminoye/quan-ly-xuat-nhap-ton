@@ -11,10 +11,10 @@ const PIE_COLORS = ['#2563eb', '#0ea5e9', '#10b981', '#7c3aed', '#f59e0b', '#ef4
 const fmtCurrency = (value) => new Intl.NumberFormat('vi-VN').format(value || 0);
 
 const PERIOD_OPTIONS = [
-  { value: 'day', label: 'Ngày' },
-  { value: 'week', label: 'Tuần' },
-  { value: 'month', label: 'Tháng' },
+  { value: 'day',     label: 'Ngày' },
+  { value: 'month',   label: 'Tháng' },
   { value: 'quarter', label: 'Quý' },
+  { value: 'all',     label: 'Tất cả' },
 ];
 
 function StatCard({ label, value, accent, icon }) {

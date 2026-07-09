@@ -50,20 +50,34 @@ const createProduct = async (req, res) => {
 
             await client.query('BEGIN');
 
-            // Sinh SKU trong cùng transaction với FOR UPDATE lock để tránh trùng
+            // Sinh SKU trong cùng transaction với FOR UPDATE lock để tránh trùng.
+            // Lấy MAX từ cả auto_codes và products (đề phòng seed cũ chỉ insert products).
             const prefix = 'SP';
             const year = new Date().getFullYear();
             const pattern = `${prefix}-${year}-%`;
-            const lockRes = await client.query(
-                `SELECT code FROM auto_codes WHERE code LIKE $1 ORDER BY code DESC LIMIT 1 FOR UPDATE`,
+
+            await client.query(
+                `SELECT 1 FROM auto_codes WHERE code LIKE $1 FOR UPDATE`,
                 [pattern]
             );
-            let nextNum = 1;
-            if (lockRes.rows[0]?.code) {
-                const lastNum = parseInt(lockRes.rows[0].code.split('-').pop(), 10);
-                nextNum = isNaN(lastNum) ? 1 : lastNum + 1;
-            }
-            const sku = `${prefix}-${year}-${String(nextNum).padStart(4, '0')}`;
+
+            const acRes = await client.query(
+                `SELECT code FROM auto_codes WHERE code LIKE $1 ORDER BY code DESC LIMIT 1`,
+                [pattern]
+            );
+            const pRes = await client.query(
+                `SELECT sku FROM products WHERE sku LIKE $1 ORDER BY sku DESC LIMIT 1`,
+                [pattern]
+            );
+
+            let maxNum = 0;
+            [acRes.rows[0]?.code, pRes.rows[0]?.sku].forEach(code => {
+                if (!code) return;
+                const n = parseInt(String(code).split('-').pop(), 10);
+                if (!isNaN(n) && n > maxNum) maxNum = n;
+            });
+            const sku = `${prefix}-${year}-${String(maxNum + 1).padStart(4, '0')}`;
+
             await client.query(
                 `INSERT INTO auto_codes (code, prefix, year) VALUES ($1, $2, $3) ON CONFLICT (code) DO NOTHING`,
                 [sku, prefix, year]
@@ -208,25 +222,29 @@ const getNextSku = async (req, res) => {
         const prefix = 'SP';
         const year = new Date().getFullYear();
 
+        // Lấy MAX cả từ auto_codes LẪN products (đề phòng seed cũ không insert auto_codes)
         await client.query('BEGIN');
-        const lockRes = await client.query(
-            `SELECT code FROM auto_codes WHERE code LIKE $1 ORDER BY code DESC LIMIT 1 FOR UPDATE`,
+        const acRes = await client.query(
+            `SELECT code FROM auto_codes WHERE code LIKE $1 ORDER BY code DESC LIMIT 1`,
             [`${prefix}-${year}-%`]
         );
-        let nextNum = 1;
-        if (lockRes.rows[0]?.code) {
-            const lastNum = parseInt(lockRes.rows[0].code.split('-').pop(), 10);
-            nextNum = isNaN(lastNum) ? 1 : lastNum + 1;
-        }
-        const sku = `${prefix}-${year}-${String(nextNum).padStart(4, '0')}`;
-
-        // Reserve it immediately so next call won't return the same SKU
-        await client.query(
-            `INSERT INTO auto_codes (code, prefix, year) VALUES ($1, $2, $3) ON CONFLICT (code) DO NOTHING`,
-            [sku, prefix, year]
+        const pRes = await client.query(
+            `SELECT sku FROM products WHERE sku LIKE $1 ORDER BY sku DESC LIMIT 1`,
+            [`${prefix}-${year}-%`]
         );
+
+        let maxNum = 0;
+        [acRes.rows[0]?.code, pRes.rows[0]?.sku].forEach(code => {
+            if (!code) return;
+            const n = parseInt(String(code).split('-').pop(), 10);
+            if (!isNaN(n) && n > maxNum) maxNum = n;
+        });
+        const sku = `${prefix}-${year}-${String(maxNum + 1).padStart(4, '0')}`;
+
         await client.query('COMMIT');
 
+        // Không INSERT vào auto_codes ở đây — chỉ preview.
+        // Việc INSERT sẽ do createProduct thực hiện trong transaction riêng.
         res.status(200).json({ sku });
     } catch (err) {
         await client.query('ROLLBACK').catch(() => {});

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import 'remixicon/fonts/remixicon.css';
 import api from '../services/api';
+import { exportListToExcel } from '../utils/exportList';
 
 const initialFormData = {
     company_name: '',
@@ -354,7 +355,40 @@ export default function CustomersPage() {
                             Tập trung toàn bộ danh sách khách hàng trong một không gian làm việc trực quan, dễ theo dõi và sẵn sàng mở rộng.
                         </p>
                     </div>
-                    <div style={{ display: 'flex', gap: 10, flexShrink: 0, alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: 10, flexShrink: 0, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <button
+                            type="button"
+                            onClick={async () => {
+                                const rows = filteredCustomers.map(c => [
+                                    c.customer_code || '',
+                                    c.company_name || '',
+                                    c.contact_person || '',
+                                    c.phone || '',
+                                    c.address || '',
+                                    c.creator_name || '',
+                                    c.created_at ? new Date(c.created_at).toLocaleDateString('vi-VN') : '',
+                                ]);
+                                await exportListToExcel({
+                                    filename: 'DanhSachKhachHang',
+                                    sheetName: 'KhachHang',
+                                    title: 'DANH SÁCH KHÁCH HÀNG',
+                                    headers: ['Mã KH', 'Công ty', 'Người liên hệ', 'Điện thoại', 'Địa chỉ', 'Người tạo', 'Ngày tạo'],
+                                    rows,
+                                    colWidths: [12, 28, 22, 14, 36, 16, 12],
+                                });
+                            }}
+                            style={{
+                                ...BASE_BTN,
+                                padding: isMobile ? '11px 16px' : '13px 18px',
+                                background: 'linear-gradient(135deg, #10b981 0%, #34d399 100%)',
+                                color: '#fff',
+                                fontSize: isMobile ? 13 : 14,
+                                boxShadow: '0 14px 24px rgba(16,185,129,0.22)',
+                            }}
+                        >
+                            <i className="ri-file-excel-2-line" style={{ marginRight: 6, fontSize: 16 }} />
+                            Xuất Excel
+                        </button>
                         {canEdit && (
                             <button
                                 type="button" onClick={openForm}

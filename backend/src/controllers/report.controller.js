@@ -19,19 +19,21 @@ const buildDateFilter = (period) => {
 };
 
 // ============================================================
-// Admin Dashboard — tổng quan toàn hệ thống
+// Admin Dashboard — tổng quan toàn hệ thống (Power BI style)
 // ============================================================
 const getAdminDashboard = async (req, res) => {
     try {
         const period = req.query.period || 'month';
         const dateFilter = buildDateFilter(period);
         const dateSql = dateFilter.sql ? `AND ${dateFilter.sql}` : '';
+        const soDateSql = dateSql.replace('created_at', 'o.created_at');
 
         const [totalUsersRow, totalProductsRow, totalCustomersRow, totalWarehousesRow,
             totalOrdersRow, completedOrdersRow, pendingOrdersRow,
             totalRevenueRow, totalReceiptsRow, totalOutboundsRow,
             lowStockRow, returnPendingRow, outboundPendingRow,
-            revenueByDay, ordersByDay
+            revenueByDay, ordersByDay, revenueByMonth, ordersByStatus,
+            ordersByCategory, revenueByCarrier, topCustomersList
         ] = await Promise.all([
             db.getOne('SELECT COUNT(*) as total FROM users WHERE status = \'active\''),
             db.getOne('SELECT COUNT(*) as total FROM products'),
@@ -63,7 +65,7 @@ const getAdminDashboard = async (req, res) => {
                 FROM sales_orders o
                 JOIN sales_order_items oi ON oi.order_id = o.id
                 LEFT JOIN products p ON p.id = oi.product_id
-                WHERE o.status = 'completed'
+                WHERE o.status = 'completed' ${soDateSql.replace('created_at', 'o.created_at')}
                 GROUP BY TO_CHAR(COALESCE(o.actual_delivery_date, o.updated_at, o.created_at), 'YYYY-MM-DD')
                 ORDER BY date ASC
             `),
@@ -71,37 +73,100 @@ const getAdminDashboard = async (req, res) => {
                 SELECT TO_CHAR(o.created_at, 'YYYY-MM-DD') as date,
                        COUNT(*) as orders
                 FROM sales_orders o
+                WHERE 1=1 ${soDateSql}
                 GROUP BY TO_CHAR(o.created_at, 'YYYY-MM-DD')
                 ORDER BY date ASC
+            `),
+            // Doanh thu theo tháng (12 tháng gần nhất)
+            db.getAll(`
+                SELECT TO_CHAR(COALESCE(o.actual_delivery_date, o.updated_at, o.created_at), 'YYYY-MM') as period,
+                       COALESCE(SUM(oi.quantity * COALESCE(oi.unit_price, p.sale_price, 0)), 0) as revenue,
+                       COUNT(DISTINCT o.id) as orders
+                FROM sales_orders o
+                JOIN sales_order_items oi ON oi.order_id = o.id
+                LEFT JOIN products p ON p.id = oi.product_id
+                WHERE o.status = 'completed'
+                  AND COALESCE(o.actual_delivery_date, o.updated_at, o.created_at) >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '11 months'
+                GROUP BY TO_CHAR(COALESCE(o.actual_delivery_date, o.updated_at, o.created_at), 'YYYY-MM')
+                ORDER BY period ASC
+            `),
+            // Đơn hàng theo trạng thái
+            db.getAll(`
+                SELECT status, COUNT(*) as count,
+                       COALESCE(SUM((SELECT SUM(quantity * COALESCE(unit_price, 0)) FROM sales_order_items WHERE order_id = sales_orders.id)), 0) as revenue
+                FROM sales_orders
+                WHERE 1=1 ${soDateSql}
+                GROUP BY status
+                ORDER BY count DESC
+            `),
+            // Đơn hàng theo danh mục sản phẩm
+            db.getAll(`
+                SELECT p.category as name,
+                       COUNT(DISTINCT o.id) as orders,
+                       COALESCE(SUM(oi.quantity), 0) as qty,
+                       COALESCE(SUM(oi.quantity * COALESCE(oi.unit_price, p.sale_price, 0)), 0) as revenue
+                FROM sales_orders o
+                JOIN sales_order_items oi ON oi.order_id = o.id
+                JOIN products p ON p.id = oi.product_id
+                WHERE 1=1 ${soDateSql}
+                GROUP BY p.category
+                ORDER BY revenue DESC
+            `),
+            // Doanh thu theo đơn vị vận chuyển
+            db.getAll(`
+                SELECT sh.carrier_name as name, sh.carrier_code,
+                       COUNT(DISTINCT sh.id) as shipments,
+                       COALESCE(SUM((SELECT SUM(quantity * COALESCE(unit_price, 0)) FROM sales_order_items WHERE order_id = sh.order_id)), 0) as revenue
+                FROM shipping_orders sh
+                WHERE 1=1 ${dateSql.replace('created_at', 'sh.assigned_at')}
+                GROUP BY sh.carrier_name, sh.carrier_code
+                ORDER BY shipments DESC
+            `),
+            // Top khách hàng
+            db.getAll(`
+                SELECT c.company_name as name,
+                       COUNT(DISTINCT o.id) as orders,
+                       COALESCE(SUM(oi.quantity * COALESCE(oi.unit_price, p.sale_price, 0)), 0) as total_spent
+                FROM sales_orders o
+                JOIN customers c ON c.id = o.customer_id
+                JOIN sales_order_items oi ON oi.order_id = o.id
+                LEFT JOIN products p ON p.id = oi.product_id
+                WHERE o.status = 'completed' ${soDateSql}
+                GROUP BY c.id, c.company_name
+                ORDER BY total_spent DESC LIMIT 8
             `),
         ]);
 
         const recentOrders = await db.getAll(`
             SELECT o.id, o.order_no, o.status, o.created_at,
                    c.company_name AS customer_name,
-                   COUNT(oi.id) as item_count
+                   COUNT(oi.id) as item_count,
+                   COALESCE(SUM(oi.quantity * COALESCE(oi.unit_price, p.sale_price, 0)), 0) as total_amount
             FROM sales_orders o
             JOIN customers c ON c.id = o.customer_id
             LEFT JOIN sales_order_items oi ON oi.order_id = o.id
+            LEFT JOIN products p ON p.id = oi.product_id
+            WHERE 1=1 ${soDateSql}
             GROUP BY o.id, c.company_name
-            ORDER BY o.created_at DESC LIMIT 8
+            ORDER BY o.created_at DESC LIMIT 10
         `);
 
         const topProducts = await db.getAll(`
-            SELECT p.name, p.sku, SUM(oi.quantity) as total_qty,
+            SELECT p.name, p.sku, p.category, SUM(oi.quantity) as total_qty,
                    COALESCE(SUM(oi.quantity * COALESCE(oi.unit_price, p.sale_price, 0)), 0) as total_revenue
             FROM sales_order_items oi
             JOIN sales_orders o ON o.id = oi.order_id
             JOIN products p ON p.id = oi.product_id
-            WHERE o.status = 'completed'
-            GROUP BY p.id, p.name, p.sku
-            ORDER BY total_qty DESC LIMIT 5
+            WHERE o.status = 'completed' ${soDateSql}
+            GROUP BY p.id, p.name, p.sku, p.category
+            ORDER BY total_qty DESC LIMIT 8
         `);
 
         const warehouseUtilization = await db.getAll(`
             SELECT w.name, w.warehouse_code,
                    COUNT(DISTINCT ib.product_id) as product_count,
-                   COALESCE(SUM(ib.on_hand_qty), 0) as total_qty
+                   COALESCE(SUM(ib.on_hand_qty), 0) as total_qty,
+                   COALESCE(SUM(ib.on_hand_qty * COALESCE((SELECT sale_price FROM products WHERE id = ib.product_id), 0)), 0) as total_value
             FROM warehouses w
             LEFT JOIN inventory_balances ib ON ib.warehouse_id = w.id
             GROUP BY w.id, w.name, w.warehouse_code
@@ -111,7 +176,17 @@ const getAdminDashboard = async (req, res) => {
         const returnStats = await db.getAll(`
             SELECT status, COUNT(*) as count
             FROM return_requests
+            WHERE 1=1 ${dateSql.replace('created_at', 'return_requests.created_at')}
             GROUP BY status
+        `);
+
+        const returnReasons = await db.getAll(`
+            SELECT customer_reject_reason as reason, COUNT(*) as count
+            FROM return_requests
+            WHERE customer_reject_reason IS NOT NULL
+              ${dateSql.replace('created_at', 'created_at')}
+            GROUP BY customer_reject_reason
+            ORDER BY count DESC
         `);
 
         res.status(200).json({
@@ -134,10 +209,16 @@ const getAdminDashboard = async (req, res) => {
             charts: {
                 revenue_by_day: revenueByDay,
                 orders_by_day: ordersByDay,
+                revenue_by_month: revenueByMonth,
+                orders_by_status: ordersByStatus,
+                orders_by_category: ordersByCategory,
+                revenue_by_carrier: revenueByCarrier,
+                return_reasons: returnReasons,
             },
             tables: {
                 recent_orders: recentOrders,
                 top_products: topProducts,
+                top_customers: topCustomersList,
                 warehouse_utilization: warehouseUtilization,
                 return_stats: returnStats,
             },

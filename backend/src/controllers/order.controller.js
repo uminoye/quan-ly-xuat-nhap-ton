@@ -8,19 +8,27 @@ const getNextOrderNo = async (req, res) => {
         const year = new Date().getFullYear();
         const pattern = `SO-${year}-%`;
 
-        const maxRes = await client.query(
-            `SELECT order_no FROM sales_orders WHERE order_no LIKE $1 ORDER BY order_no DESC LIMIT 1 FOR UPDATE`,
+        await client.query(
+            `SELECT 1 FROM sales_orders WHERE order_no LIKE $1 FOR UPDATE`,
             [pattern]
         );
-        console.log('[getNextOrderNo] maxRes.rows:', maxRes.rows);
 
-        let nextNum = 1;
-        if (maxRes.rows[0]?.order_no) {
-            const lastNum = parseInt(maxRes.rows[0].order_no.split('-').pop(), 10);
-            nextNum = isNaN(lastNum) ? 1 : lastNum + 1;
-        }
-        const order_no = `SO-${year}-${String(nextNum).padStart(4, '0')}`;
-        console.log('[getNextOrderNo] returning:', order_no);
+        const soRes = await client.query(
+            `SELECT order_no FROM sales_orders WHERE order_no LIKE $1 ORDER BY order_no DESC LIMIT 1`,
+            [pattern]
+        );
+        const acRes = await client.query(
+            `SELECT code FROM auto_codes WHERE code LIKE $1 ORDER BY code DESC LIMIT 1`,
+            [pattern]
+        );
+
+        let maxNum = 0;
+        [soRes.rows[0]?.order_no, acRes.rows[0]?.code].forEach(code => {
+            if (!code) return;
+            const n = parseInt(String(code).split('-').pop(), 10);
+            if (!isNaN(n) && n > maxNum) maxNum = n;
+        });
+        const order_no = `SO-${year}-${String(maxNum + 1).padStart(4, '0')}`;
 
         await client.query('COMMIT');
         res.status(200).json({ order_no });
@@ -130,22 +138,31 @@ const createOrder = async (req, res) => {
 
         await client.query('BEGIN');
 
-        // Tìm số lớn nhất từ bảng sales_orders, lock để tránh race condition
+        // Tìm số lớn nhất từ cả sales_orders và auto_codes (đề phòng seed cũ), lock để tránh race condition
         const year = new Date().getFullYear();
         const pattern = `SO-${year}-%`;
-        const maxRes = await client.query(
-            `SELECT order_no FROM sales_orders WHERE order_no LIKE $1 ORDER BY order_no DESC LIMIT 1 FOR UPDATE`,
+
+        await client.query(
+            `SELECT 1 FROM sales_orders WHERE order_no LIKE $1 FOR UPDATE`,
             [pattern]
         );
-        console.log('[createOrder] maxRes.rows:', maxRes.rows, 'year:', year, 'pattern:', pattern);
 
-        let nextNum = 1;
-        if (maxRes.rows[0]?.order_no) {
-            const lastNum = parseInt(maxRes.rows[0].order_no.split('-').pop(), 10);
-            nextNum = isNaN(lastNum) ? 1 : lastNum + 1;
-        }
-        const order_no = `SO-${year}-${String(nextNum).padStart(4, '0')}`;
-        console.log('[createOrder] order_no generated:', order_no);
+        const soRes = await client.query(
+            `SELECT order_no FROM sales_orders WHERE order_no LIKE $1 ORDER BY order_no DESC LIMIT 1`,
+            [pattern]
+        );
+        const acRes = await client.query(
+            `SELECT code FROM auto_codes WHERE code LIKE $1 ORDER BY code DESC LIMIT 1`,
+            [pattern]
+        );
+
+        let maxNum = 0;
+        [soRes.rows[0]?.order_no, acRes.rows[0]?.code].forEach(code => {
+            if (!code) return;
+            const n = parseInt(String(code).split('-').pop(), 10);
+            if (!isNaN(n) && n > maxNum) maxNum = n;
+        });
+        const order_no = `SO-${year}-${String(maxNum + 1).padStart(4, '0')}`;
 
         // Insert đơn hàng
         const result = await client.query(

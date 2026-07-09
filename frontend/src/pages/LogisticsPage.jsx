@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import api from '../services/api';
+import { exportListToExcel } from '../utils/exportList';
 
 const CARRIERS = [
   { code: 'GHN', name: 'Giao Hàng Nhanh (GHN)', prefix: 'GHN' },
@@ -866,9 +867,44 @@ export default function LogisticsPage() {
             ))}
           </div>
 
-          {/* Search */}
-          <div style={{ padding: '18px 24px 0' }}>
-            <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Tìm theo mã đơn, khách hàng..." style={pageStyles.input} />
+          {/* Search + Export */}
+          <div style={{ padding: '18px 24px 0', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Tìm theo mã đơn, khách hàng..." style={{ ...pageStyles.input, flex: 1, minWidth: 200 }} />
+            <button
+              onClick={async () => {
+                const list = activeTab === 'pending' ? pendingOrders : trackingOrders;
+                const rows = list.map(o => [
+                  o.order_no || '',
+                  o.customer_name || '',
+                  o.customer_phone || '',
+                  o.customer_address || '',
+                  o.expected_delivery_date ? new Date(o.expected_delivery_date).toLocaleDateString('vi-VN') : '',
+                  o.actual_delivery_date ? new Date(o.actual_delivery_date).toLocaleDateString('vi-VN') : '',
+                  o.status || '',
+                  o.delivery_step || 0,
+                  o.tracking_no || '',
+                  o.carrier_name || '',
+                ]);
+                await exportListToExcel({
+                  filename: 'DanhSachGiaoHang',
+                  sheetName: 'GiaoHang',
+                  title: 'DANH SÁCH ĐƠN GIAO HÀNG / VẬN CHUYỂN',
+                  headers: ['Mã đơn', 'Khách hàng', 'SĐT', 'Địa chỉ', 'Ngày giao DK', 'Ngày giao TT', 'Trạng thái', 'Step', 'Mã vận đơn', 'ĐVVC'],
+                  rows,
+                  colWidths: [16, 24, 14, 32, 14, 14, 16, 8, 18, 14],
+                });
+              }}
+              style={{
+                padding: '10px 16px', borderRadius: 10, border: 'none',
+                background: 'linear-gradient(135deg, #10b981, #34d399)', color: '#fff',
+                fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                boxShadow: '0 6px 14px rgba(16,185,129,0.22)',
+                display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
+              }}
+            >
+              <i className="ri-file-excel-2-line" style={{ fontSize: 15 }} />
+              Xuất Excel
+            </button>
           </div>
 
           {/* Table */}
