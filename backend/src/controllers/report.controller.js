@@ -27,6 +27,11 @@ const getAdminDashboard = async (req, res) => {
         const dateFilter = buildDateFilter(period);
         const dateSql = dateFilter.sql ? `AND ${dateFilter.sql}` : '';
         const soDateSql = dateSql.replace('created_at', 'o.created_at');
+        // Dùng actual_delivery_date cho chart (phân bố đều theo tháng), fallback về created_at
+        const orderDateCol = 'COALESCE(o.actual_delivery_date, o.updated_at, o.created_at)';
+        const orderDateSql = dateFilter.sql
+            ? `AND ${dateFilter.sql.replace('created_at', orderDateCol)}`
+            : '';
 
         const [totalUsersRow, totalProductsRow, totalCustomersRow, totalWarehousesRow,
             totalOrdersRow, completedOrdersRow, pendingOrdersRow,
@@ -59,35 +64,38 @@ const getAdminDashboard = async (req, res) => {
             `),
             db.getOne(`SELECT COUNT(*) as total FROM return_requests WHERE status IN ('return_pending', 'pending')`),
             db.getOne(`SELECT COUNT(*) as total FROM stock_outbound_notes WHERE status = 'pending'`),
+            // Doanh thu theo ngày (dùng actual_delivery_date, có filter period)
             db.getAll(`
-                SELECT TO_CHAR(COALESCE(o.actual_delivery_date, o.updated_at, o.created_at), 'YYYY-MM-DD') as date,
+                SELECT TO_CHAR(${orderDateCol}, 'YYYY-MM-DD') as date,
                        COALESCE(SUM(oi.quantity * COALESCE(oi.unit_price, p.sale_price, 0)), 0) as revenue
                 FROM sales_orders o
                 JOIN sales_order_items oi ON oi.order_id = o.id
                 LEFT JOIN products p ON p.id = oi.product_id
-                WHERE o.status = 'completed' ${soDateSql}
-                GROUP BY TO_CHAR(COALESCE(o.actual_delivery_date, o.updated_at, o.created_at), 'YYYY-MM-DD')
+                WHERE o.status = 'completed' ${orderDateSql}
+                GROUP BY TO_CHAR(${orderDateCol}, 'YYYY-MM-DD')
                 ORDER BY date ASC
             `),
+            // Đơn hàng theo ngày (dùng actual_delivery_date, có filter period)
             db.getAll(`
-                SELECT TO_CHAR(o.created_at, 'YYYY-MM-DD') as date,
+                SELECT TO_CHAR(${orderDateCol}, 'YYYY-MM-DD') as date,
                        COUNT(*) as orders
                 FROM sales_orders o
-                WHERE 1=1 ${soDateSql}
-                GROUP BY TO_CHAR(o.created_at, 'YYYY-MM-DD')
+                WHERE 1=1 ${orderDateSql}
+                GROUP BY TO_CHAR(${orderDateCol}, 'YYYY-MM-DD')
                 ORDER BY date ASC
             `),
-            // Doanh thu theo tháng (12 tháng gần nhất)
+            // Doanh thu theo tháng — 12 tháng gần nhất + filter period
             db.getAll(`
-                SELECT TO_CHAR(COALESCE(o.actual_delivery_date, o.updated_at, o.created_at), 'YYYY-MM') as period,
+                SELECT TO_CHAR(${orderDateCol}, 'YYYY-MM') as period,
                        COALESCE(SUM(oi.quantity * COALESCE(oi.unit_price, p.sale_price, 0)), 0) as revenue,
                        COUNT(DISTINCT o.id) as orders
                 FROM sales_orders o
                 JOIN sales_order_items oi ON oi.order_id = o.id
                 LEFT JOIN products p ON p.id = oi.product_id
                 WHERE o.status = 'completed'
-                  AND COALESCE(o.actual_delivery_date, o.updated_at, o.created_at) >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '11 months'
-                GROUP BY TO_CHAR(COALESCE(o.actual_delivery_date, o.updated_at, o.created_at), 'YYYY-MM')
+                  AND ${orderDateCol} >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '11 months'
+                  ${orderDateSql}
+                GROUP BY TO_CHAR(${orderDateCol}, 'YYYY-MM')
                 ORDER BY period ASC
             `),
             // Đơn hàng theo trạng thái
@@ -99,7 +107,7 @@ const getAdminDashboard = async (req, res) => {
                 GROUP BY status
                 ORDER BY count DESC
             `),
-            // Đơn hàng theo danh mục sản phẩm
+            // Đơn hàng theo danh mục sản phẩm (dùng actual_delivery_date, có filter period)
             db.getAll(`
                 SELECT p.category as name,
                        COUNT(DISTINCT o.id) as orders,
@@ -108,7 +116,7 @@ const getAdminDashboard = async (req, res) => {
                 FROM sales_orders o
                 JOIN sales_order_items oi ON oi.order_id = o.id
                 JOIN products p ON p.id = oi.product_id
-                WHERE 1=1 ${soDateSql}
+                WHERE 1=1 ${orderDateSql}
                 GROUP BY p.category
                 ORDER BY revenue DESC
             `),
@@ -122,7 +130,7 @@ const getAdminDashboard = async (req, res) => {
                 GROUP BY sh.carrier_name, sh.carrier_code
                 ORDER BY shipments DESC
             `),
-            // Top khách hàng
+            // Top khách hàng (dùng actual_delivery_date, có filter period)
             db.getAll(`
                 SELECT c.company_name as name,
                        COUNT(DISTINCT o.id) as orders,
@@ -131,7 +139,7 @@ const getAdminDashboard = async (req, res) => {
                 JOIN customers c ON c.id = o.customer_id
                 JOIN sales_order_items oi ON oi.order_id = o.id
                 LEFT JOIN products p ON p.id = oi.product_id
-                WHERE o.status = 'completed' ${soDateSql}
+                WHERE o.status = 'completed' ${orderDateSql}
                 GROUP BY c.id, c.company_name
                 ORDER BY total_spent DESC LIMIT 8
             `),
@@ -146,7 +154,7 @@ const getAdminDashboard = async (req, res) => {
             JOIN customers c ON c.id = o.customer_id
             LEFT JOIN sales_order_items oi ON oi.order_id = o.id
             LEFT JOIN products p ON p.id = oi.product_id
-            WHERE 1=1 ${soDateSql}
+            WHERE 1=1 ${orderDateSql}
             GROUP BY o.id, c.company_name
             ORDER BY o.created_at DESC LIMIT 10
         `);
@@ -157,7 +165,7 @@ const getAdminDashboard = async (req, res) => {
             FROM sales_order_items oi
             JOIN sales_orders o ON o.id = oi.order_id
             JOIN products p ON p.id = oi.product_id
-            WHERE o.status = 'completed' ${soDateSql}
+            WHERE o.status = 'completed' ${orderDateSql}
             GROUP BY p.id, p.name, p.sku, p.category
             ORDER BY total_qty DESC LIMIT 8
         `);
