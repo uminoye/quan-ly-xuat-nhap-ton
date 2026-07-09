@@ -208,14 +208,6 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              {/* Forgot */}
-              <div style={S.forgotRow}>
-                <label style={S.checkbox}>
-                  <input type="checkbox" /> <span>Ghi nhớ</span>
-                </label>
-                <a href="#" style={S.forgot}>Quên mật khẩu?</a>
-              </div>
-
               <button type="submit" className="login-submit" style={S.submit}>
                 Đăng nhập
                 <i className="ri-arrow-right-line" style={{ marginLeft: 8, fontSize: 18 }} />
@@ -407,10 +399,6 @@ const S = {
     display: 'grid', placeItems: 'center', cursor: 'pointer',
     transition: 'background 150ms, color 150ms',
   },
-
-  forgotRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: -4 },
-  checkbox: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#475569', cursor: 'pointer' },
-  forgot: { fontSize: 13, color: '#1e40af', textDecoration: 'none', fontWeight: 600 },
 
   submit: {
     height: 50, marginTop: 6, border: 'none', borderRadius: 12,
