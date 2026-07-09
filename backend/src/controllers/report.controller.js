@@ -32,6 +32,10 @@ const getAdminDashboard = async (req, res) => {
         const orderDateSql = dateFilter.sql
             ? `AND ${dateFilter.sql.replace('created_at', orderDateCol)}`
             : '';
+        // revenueByMonth: group by month for quarter/all, by day for day/week/month
+        const revenueMonthGroup = period === 'quarter' || period === 'all'
+            ? `TO_CHAR(${orderDateCol}, 'YYYY-MM')`
+            : `TO_CHAR(${orderDateCol}, 'YYYY-MM-DD')`;
 
         const [totalUsersRow, totalProductsRow, totalCustomersRow, totalWarehousesRow,
             totalOrdersRow, completedOrdersRow, pendingOrdersRow,
@@ -84,9 +88,9 @@ const getAdminDashboard = async (req, res) => {
                 GROUP BY TO_CHAR(${orderDateCol}, 'YYYY-MM-DD')
                 ORDER BY date ASC
             `),
-            // Doanh thu theo tháng — 12 tháng gần nhất + filter period
+            // Doanh thu theo tháng — nhóm theo tháng (quarter/all) hoặc ngày (day/week/month) + filter period
             db.getAll(`
-                SELECT TO_CHAR(${orderDateCol}, 'YYYY-MM') as period,
+                SELECT ${revenueMonthGroup} as period,
                        COALESCE(SUM(oi.quantity * COALESCE(oi.unit_price, p.sale_price, 0)), 0) as revenue,
                        COUNT(DISTINCT o.id) as orders
                 FROM sales_orders o
@@ -95,7 +99,7 @@ const getAdminDashboard = async (req, res) => {
                 WHERE o.status = 'completed'
                   AND ${orderDateCol} >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '11 months'
                   ${orderDateSql}
-                GROUP BY TO_CHAR(${orderDateCol}, 'YYYY-MM')
+                GROUP BY ${revenueMonthGroup}
                 ORDER BY period ASC
             `),
             // Đơn hàng theo trạng thái
