@@ -113,13 +113,13 @@ export default function ReportsPage() {
 
     return (
       <>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 14, marginBottom: 18 }}>
+        <div className="rep-grid rep-grid-3">
           <StatCard label="Mã SP" value={summary.totalItems} accent={roleColor} icon="ri-box-3-line" />
           <StatCard label="Tổng tồn" value={summary.totalQty} accent="#10b981" icon="ri-stack-line" />
           <StatCard label="Giá trị tồn" value={`${fmtCurrency(summary.totalValue)} đ`} accent="#f59e0b" icon="ri-coins-line" />
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 18 }}>
+        <div className="rep-grid rep-grid-2 mb-18">
           <div style={{ background: '#fff', borderRadius: 20, padding: 20, border: '1px solid #e0e7ff', boxShadow: '0 10px 30px rgba(15,23,42,0.05)' }}>
             <h3 style={{ margin: '0 0 14px', fontSize: 16, fontWeight: 800 }}>Top 6 giá trị tồn cao</h3>
             {items.length > 0 ? (
@@ -152,7 +152,7 @@ export default function ReportsPage() {
 
         <div style={{ background: '#fff', borderRadius: 20, padding: 20, border: '1px solid #e0e7ff', boxShadow: '0 10px 30px rgba(15,23,42,0.05)' }}>
           <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 800 }}>Chi tiết tồn kho</h3>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <div className="table-responsive"><table style={{ width: "100%", minWidth: 600, borderCollapse: "collapse" }}>
             <thead><tr style={{ fontSize: 12, color: '#94a3b8', borderBottom: '1px solid #e0e7ff' }}>
               <th style={{ padding: '8px 0', textAlign: 'left' }}>SKU</th>
               <th style={{ padding: '8px 0', textAlign: 'left' }}>Sản phẩm</th>
@@ -175,7 +175,7 @@ export default function ReportsPage() {
                 ))
               }
             </tbody>
-          </table>
+          </table></div>
         </div>
       </>
     );
@@ -193,13 +193,13 @@ export default function ReportsPage() {
 
     return (
       <>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 14, marginBottom: 18 }}>
+        <div className="rep-grid rep-grid-3">
           <StatCard label="Tổng đơn" value={s.total_orders || 0} accent={roleColor} icon="ri-shopping-bag-3-line" />
           <StatCard label="Tổng doanh thu" value={`${fmtCurrency(s.total_revenue)} đ`} accent="#10b981" icon="ri-money-cny-circle-line" />
           <StatCard label="Kỳ báo cáo" value={data?.period || '—'} accent="#7c3aed" icon="ri-calendar-line" />
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 18 }}>
+        <div className="rep-grid rep-grid-2 mb-18">
           <div style={{ background: '#fff', borderRadius: 20, padding: 20, border: '1px solid #e0e7ff', boxShadow: '0 10px 30px rgba(15,23,42,0.05)' }}>
             <h3 style={{ margin: '0 0 14px', fontSize: 16, fontWeight: 800 }}>Doanh thu theo {data?.group_by === 'month' ? 'tháng' : 'ngày'}</h3>
             {revenueData.length > 0 ? (
@@ -229,10 +229,10 @@ export default function ReportsPage() {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <div className="rep-grid rep-grid-2">
           <div style={{ background: '#fff', borderRadius: 20, padding: 20, border: '1px solid #e0e7ff', boxShadow: '0 10px 30px rgba(15,23,42,0.05)' }}>
             <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 800 }}>Top sản phẩm bán chạy</h3>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <div className="table-responsive"><table style={{ width: "100%", minWidth: 600, borderCollapse: "collapse" }}>
               <thead><tr style={{ fontSize: 12, color: '#94a3b8', borderBottom: '1px solid #e0e7ff' }}>
                 <th style={{ padding: '6px 0', textAlign: 'left' }}>SP</th><th style={{ padding: '6px 0', textAlign: 'right' }}>SL</th><th style={{ padding: '6px 0', textAlign: 'right' }}>Doanh thu</th>
               </tr></thead>
@@ -243,12 +243,12 @@ export default function ReportsPage() {
                   <td style={{ padding: '7px 0', textAlign: 'right', fontSize: 13, fontWeight: 700, color: roleColor }}>{fmtCurrency(p.total_revenue)} đ</td>
                 </tr>
               ))}</tbody>
-            </table>
+            </table></div>
           </div>
 
           <div style={{ background: '#fff', borderRadius: 20, padding: 20, border: '1px solid #e0e7ff', boxShadow: '0 10px 30px rgba(15,23,42,0.05)' }}>
             <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 800 }}>Top khách hàng</h3>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <div className="table-responsive"><table style={{ width: "100%", minWidth: 600, borderCollapse: "collapse" }}>
               <thead><tr style={{ fontSize: 12, color: '#94a3b8', borderBottom: '1px solid #e0e7ff' }}>
                 <th style={{ padding: '6px 0', textAlign: 'left' }}>Khách hàng</th><th style={{ padding: '6px 0', textAlign: 'right' }}>Đơn</th><th style={{ padding: '6px 0', textAlign: 'right' }}>Chi tiêu</th>
               </tr></thead>
@@ -259,7 +259,7 @@ export default function ReportsPage() {
                   <td style={{ padding: '7px 0', textAlign: 'right', fontSize: 13, fontWeight: 700, color: '#10b981' }}>{fmtCurrency(c.total_spent)} đ</td>
                 </tr>
               ))}</tbody>
-            </table>
+            </table></div>
           </div>
         </div>
       </>
@@ -277,7 +277,7 @@ export default function ReportsPage() {
 
     return (
       <>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 14, marginBottom: 18 }}>
+        <div className="rep-grid rep-grid-3">
           <StatCard label="Giao hàng" value={delStats.reduce((s, r) => s + Number(r.count || 0), 0)} accent={roleColor} icon="ri-truck-line" />
           <StatCard label="Hoàn hàng" value={retStats.reduce((s, r) => s + Number(r.count || 0), 0)} accent="#f97316" icon="ri-arrow-go-back-line" />
           <StatCard label="Phiếu bù" value={compStats.reduce((s, r) => s + Number(r.count || 0), 0)} accent="#ef4444" icon="ri-file-list-3-line" />
@@ -286,7 +286,7 @@ export default function ReportsPage() {
           <h3 style={{ margin: '0 0 14px', fontSize: 16, fontWeight: 800 }}>Giao hàng theo ngày</h3>
           {delData.length > 0 ? <ResponsiveContainer width="100%" height={260}><BarChart data={delData}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e0e7ff" /><XAxis dataKey="name" tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} /><Tooltip /><Bar dataKey="deliveries" fill={roleColor} radius={[8, 8, 0, 0]} /></BarChart></ResponsiveContainer> : <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Chưa có dữ liệu</div>}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <div className="rep-grid rep-grid-2">
           <div style={{ background: '#fff', borderRadius: 20, padding: 20, border: '1px solid #e0e7ff' }}>
             <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 800 }}>Đơn vị vận chuyển</h3>
             {carrierStats.length === 0 ? <div style={{ padding: 16, color: '#94a3b8', textAlign: 'center' }}>Chưa có dữ liệu</div> :
@@ -324,12 +324,12 @@ export default function ReportsPage() {
 
     return (
       <>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 14, marginBottom: 18 }}>
+        <div className="rep-grid rep-grid-4">
           {recStats.map((st, i) => (
             <StatCard key={i} label={`Nhập: ${st.status}`} value={`${st.count} phiếu`} accent={roleColor} icon="ri-inbox-archive-line" />
           ))}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 18 }}>
+        <div className="rep-grid rep-grid-2 mb-18">
           <div style={{ background: '#fff', borderRadius: 20, padding: 20, border: '1px solid #e0e7ff' }}>
             <h3 style={{ margin: '0 0 14px', fontSize: 16, fontWeight: 800 }}>Nhập kho theo ngày</h3>
             {recData.length > 0 ? <ResponsiveContainer width="100%" height={260}><BarChart data={recData}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e0e7ff" /><XAxis dataKey="name" tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} /><Tooltip /><Bar dataKey="receipts" fill="#10b981" radius={[8, 8, 0, 0]} /></BarChart></ResponsiveContainer> : <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Chưa có dữ liệu</div>}
@@ -339,11 +339,11 @@ export default function ReportsPage() {
             {outData.length > 0 ? <ResponsiveContainer width="100%" height={260}><BarChart data={outData}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e0e7ff" /><XAxis dataKey="name" tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} /><Tooltip /><Bar dataKey="outbounds" fill="#7c3aed" radius={[8, 8, 0, 0]} /></BarChart></ResponsiveContainer> : <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Chưa có dữ liệu</div>}
           </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <div className="rep-grid rep-grid-2">
           <div style={{ background: '#fff', borderRadius: 20, padding: 20, border: '1px solid #e0e7ff' }}>
             <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 800 }}>Biến động hàng hóa</h3>
             {productMove.length === 0 ? <div style={{ padding: 16, color: '#94a3b8', textAlign: 'center' }}>Chưa có dữ liệu</div> :
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <div className="table-responsive"><table style={{ width: "100%", minWidth: 600, borderCollapse: "collapse" }}>
                 <thead><tr style={{ fontSize: 12, color: '#94a3b8', borderBottom: '1px solid #e0e7ff' }}>
                   <th style={{ padding: '6px 0', textAlign: 'left' }}>SP</th><th style={{ padding: '6px 0', textAlign: 'right' }}>Nhập</th><th style={{ padding: '6px 0', textAlign: 'right' }}>Xuất</th><th style={{ padding: '6px 0', textAlign: 'right' }}>Tồn</th>
                 </tr></thead>
@@ -355,7 +355,7 @@ export default function ReportsPage() {
                     <td style={{ padding: '7px 0', textAlign: 'right', fontWeight: 700 }}>{p.current_stock || 0}</td>
                   </tr>
                 ))}</tbody>
-              </table>
+              </table></div>
             }
           </div>
           <div style={{ background: '#fff', borderRadius: 20, padding: 20, border: '1px solid #e0e7ff' }}>
@@ -385,13 +385,13 @@ export default function ReportsPage() {
 
     return (
       <>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 14, marginBottom: 18 }}>
+        <div className="rep-grid rep-grid-3">
           <StatCard label="Phiếu nhập" value={recStats.reduce((s, r) => s + Number(r.count || 0), 0)} accent={roleColor} icon="ri-inbox-archive-line" />
           <StatCard label="Phiếu bù" value={compStats.reduce((s, r) => s + Number(r.count || 0), 0)} accent="#ef4444" icon="ri-file-list-3-line" />
           <StatCard label="Kỳ báo cáo" value={data?.period || '—'} accent="#7c3aed" icon="ri-calendar-line" />
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 18 }}>
+        <div className="rep-grid rep-grid-2 mb-18">
           <div style={{ background: '#fff', borderRadius: 20, padding: 20, border: '1px solid #e0e7ff' }}>
             <h3 style={{ margin: '0 0 14px', fontSize: 16, fontWeight: 800 }}>Phiếu nhập theo ngày</h3>
             {recData.length > 0 ? <ResponsiveContainer width="100%" height={260}><BarChart data={recData}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e0e7ff" /><XAxis dataKey="name" tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} /><Tooltip /><Bar dataKey="receipts" fill={roleColor} radius={[8, 8, 0, 0]} /></BarChart></ResponsiveContainer> : <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Chưa có dữ liệu</div>}
@@ -411,7 +411,7 @@ export default function ReportsPage() {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <div className="rep-grid rep-grid-2">
           <div style={{ background: '#fff', borderRadius: 20, padding: 20, border: '1px solid #e0e7ff' }}>
             <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 800 }}>Phiếu nhập chờ duyệt</h3>
             {pendingRec.length === 0 ? <div style={{ padding: 16, color: '#94a3b8', textAlign: 'center' }}>Không có phiếu chờ</div> :
@@ -441,7 +441,25 @@ export default function ReportsPage() {
 
   return (
     <div style={{ padding: 24, minHeight: '100vh', background: 'linear-gradient(160deg, #f5f7fb, #eef3f9)', opacity: mounted ? 1 : 0, transition: 'opacity 320ms' }}>
-      <style>{`@keyframes spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }`}</style>
+      <style>{`
+  @keyframes spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+  .rep-grid { display: grid; gap: 14px; }
+  .rep-grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .rep-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 18px; }
+  .rep-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mb-18 { margin-bottom: 18px; }
+  
+  @media (max-width: 1024px) {
+    .rep-grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 18px; }
+    .rep-grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 768px) {
+    .rep-grid-4 { grid-template-columns: 1fr; }
+    .rep-grid-3 { grid-template-columns: 1fr; }
+    .rep-grid-2 { grid-template-columns: 1fr; }
+    .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  }
+`}</style>
 
       <div style={{ maxWidth: 1440, margin: '0 auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 18 }}>
