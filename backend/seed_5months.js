@@ -733,7 +733,7 @@ async function main() {
             const reason = weightedPick(['khong_nhan_hang', 'sai_hang', 'hong_vo', 'khong_dung_mo_ta']);
             const source = weightedPick(['after_delivery', 'during_delivery']);
             const action = weightedPick(['return_to_warehouse', 'exchange', 'refund']);
-            const rrstatus = weightedPick(['pending', 'processing', 'resolved', 'closed']);
+            const rrstatus = weightedPick(['return_pending', 'logistics_handled', 'return_completed', 'return_to_sales']);
             const createdAt = fmtDate(o.actualDelivery || o.date);
             returnList.push({ order: o, reason, source, action, rrstatus, createdAt });
 
