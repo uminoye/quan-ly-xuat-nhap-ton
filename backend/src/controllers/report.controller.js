@@ -661,16 +661,16 @@ const getSalesReport = async (req, res) => {
 
         const [revenueRows, orderStats, topProducts, customerStats] = await Promise.all([
             db.getAll(`
-                SELECT TO_CHAR(COALESCE(o.actual_delivery_date, o.updated_at, o.created_at), $1) as period,
+                SELECT TO_CHAR(COALESCE(o.actual_delivery_date, o.updated_at, o.created_at), '${dateFormat}') as period,
                        COALESCE(SUM(oi.quantity * COALESCE(oi.unit_price, p.sale_price, 0)), 0) as revenue,
                        COUNT(DISTINCT o.id) as orders
                 FROM sales_orders o
                 JOIN sales_order_items oi ON oi.order_id = o.id
                 LEFT JOIN products p ON p.id = oi.product_id
                 WHERE o.status = 'completed' ${dateSql} ${userFilter}
-                GROUP BY TO_CHAR(COALESCE(o.actual_delivery_date, o.updated_at, o.created_at), $1)
+                GROUP BY TO_CHAR(COALESCE(o.actual_delivery_date, o.updated_at, o.created_at), '${dateFormat}')
                 ORDER BY period ASC
-            `, [dateFormat, ...(isAdmin ? [] : [userId])]),
+            `, [...(isAdmin ? [] : [userId])]),
             db.getAll(`
                 SELECT status, COUNT(*) as count,
                        COALESCE(SUM(oi.quantity * COALESCE(oi.unit_price, p.sale_price, 0)), 0) as revenue
