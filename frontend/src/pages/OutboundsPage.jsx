@@ -23,6 +23,7 @@ export default function OutboundsPage() {
   const [hoveredOrderId, setHoveredOrderId] = useState(null);
   const [isContentVisible, setIsContentVisible] = useState(false);
   const [hoveredStat, setHoveredStat] = useState(null);
+  const [period, setPeriod] = useState('month');
   const [refreshing, setRefreshing] = useState(false);
 
   // ── Responsive ──────────────────────────────────────────────────────────────
@@ -65,7 +66,7 @@ export default function OutboundsPage() {
     if (showTableLoading) setLoading(true);
 
     try {
-      const [pendingRes, whRes] = await Promise.all([api.get('/outbounds/pending'), api.get('/warehouses/for-outbound')]);
+      const [pendingRes, whRes] = await Promise.all([api.get(`/outbounds/pending?period=${period}`), api.get('/warehouses/for-outbound')]);
       setOrders(pendingRes.data || []);
       setWarehouses(whRes.data || []);
     } catch (error) {
@@ -77,7 +78,7 @@ export default function OutboundsPage() {
 
   useEffect(() => {
     fetchData({ showTableLoading: true });
-  }, []);
+  }, [period]);
 
   useEffect(() => {
     if (targetWarehouse) {
@@ -568,6 +569,16 @@ export default function OutboundsPage() {
             <p style={{ margin: '6px 0 0', color: '#64748b', fontSize: isMobile ? 12 : 14, lineHeight: 1.6 }}>Danh sách đơn chờ xuất, tối ưu cho thao tác nhanh</p>
           </div>
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <select
+              value={period}
+              onChange={(e) => setPeriod(e.target.value)}
+              style={{ padding: '10px 14px', borderRadius: '12px', border: '1px solid #dbe3ee', background: '#fff', color: '#334155', fontWeight: 600, outline: 'none' }}
+            >
+              <option value="day">Hôm nay</option>
+              <option value="month">Tháng này</option>
+              <option value="quarter">Quý này</option>
+              <option value="all">Tất cả thời gian</option>
+            </select>
             <button
               onClick={handleRefresh}
               disabled={refreshing}

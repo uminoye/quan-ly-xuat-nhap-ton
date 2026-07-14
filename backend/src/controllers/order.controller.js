@@ -40,8 +40,12 @@ const getNextOrderNo = async (req, res) => {
     }
 };
 
+const { buildDateFilter } = require('../utils/dateFilter');
+
 const getAllOrders = async (req, res) => {
     try {
+        const period = req.query.period || 'month';
+        const dateSql = buildDateFilter(period, 'o.created_at');
         const query = `
             SELECT
                 o.id,
@@ -75,6 +79,7 @@ const getAllOrders = async (req, res) => {
             JOIN customers c ON o.customer_id = c.id
             LEFT JOIN sales_order_items oi ON oi.order_id = o.id
             LEFT JOIN products p ON p.id = oi.product_id
+            WHERE 1=1 ${dateSql}
             ORDER BY o.created_at DESC, oi.id ASC
         `;
         const rows = await db.getAll(query);

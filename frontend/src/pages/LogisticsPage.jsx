@@ -125,6 +125,7 @@ export default function LogisticsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [hoveredCard, setHoveredCard] = useState(null);
   const [hoveredOrderId, setHoveredOrderId] = useState(null);
+  const [period, setPeriod] = useState('month');
 
   // Dispatch modal
   const [isDispatchOpen, setIsDispatchOpen] = useState(false);
@@ -174,9 +175,9 @@ export default function LogisticsPage() {
   const fetchData = async () => {
     try {
       const [ordersRes, shippingRes, returnsRes] = await Promise.all([
-        api.get('/orders'),
-        api.get('/logistics/shipping'),
-        api.get('/logistics/returns'),
+        api.get(`/orders?period=${period}`),
+        api.get(`/logistics/shipping?period=${period}`),
+        api.get(`/logistics/returns?period=${period}`),
       ]);
       setOrders(Array.isArray(ordersRes.data) ? ordersRes.data : []);
       setShippingOrders(Array.isArray(shippingRes.data) ? shippingRes.data : []);
@@ -192,7 +193,7 @@ export default function LogisticsPage() {
     fetchData();
     const t = window.setTimeout(() => setPageMounted(true), 40);
     return () => window.clearTimeout(t);
-  }, []);
+  }, [period]);
 
   // Đóng modal bằng Escape
   useEffect(() => {
@@ -806,10 +807,25 @@ export default function LogisticsPage() {
       `}</style>
       <div style={pageStyles.shell}>
         {/* Hero */}
-        <div style={pageStyles.hero}>
+        <div style={{ ...pageStyles.hero, transform: pageMounted ? 'translateY(0)' : 'translateY(20px)', opacity: pageMounted ? 1 : 0, transition: 'all 0.6s cubic-bezier(0.16, 1, 0.3, 1)' }}>
           <div>
             <h2 style={pageStyles.heroTitle}>Điều phối giao hàng</h2>
             <p style={pageStyles.heroSubtitle}>Quản lý đơn từ Sales → điều phối → kho xuất → giao hàng → xử lý hoàn trong một màn hình.</p>
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <select
+              value={period}
+              onChange={(e) => setPeriod(e.target.value)}
+              style={{ ...pageStyles.input, width: 'auto', background: 'rgba(255,255,255,0.9)', fontWeight: 600, color: '#334155' }}
+            >
+              <option value="day">Hôm nay</option>
+              <option value="month">Tháng này</option>
+              <option value="quarter">Quý này</option>
+              <option value="all">Tất cả thời gian</option>
+            </select>
+            <button onClick={fetchData} style={{ ...pageStyles.actionButton, ...pageStyles.primaryButton, display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <i className="ri-refresh-line" /> Làm mới
+            </button>
           </div>
         </div>
 

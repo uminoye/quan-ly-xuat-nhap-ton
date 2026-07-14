@@ -1,8 +1,12 @@
 const db = require('../config/database');
 const { generateCode } = require('../utils/autoCode');
 
+const { buildDateFilter } = require('../utils/dateFilter');
+
 const getAllOutbounds = async (req, res) => {
     try {
+        const period = req.query.period || 'month';
+        const dateSql = buildDateFilter(period, 'o.created_at');
         const query = `
             SELECT
                 o.id, o.outbound_no, o.order_id, o.warehouse_id, o.export_date,
@@ -29,6 +33,7 @@ const getAllOutbounds = async (req, res) => {
             LEFT JOIN sales_orders s ON o.order_id = s.id
             LEFT JOIN customers c ON s.customer_id = c.id
             LEFT JOIN sales_order_items soi ON soi.order_id = s.id
+            WHERE 1=1 ${dateSql}
             GROUP BY o.id, s.id, c.id, w.id, u.id
             ORDER BY o.id DESC
         `;
@@ -45,6 +50,8 @@ const getAllOutbounds = async (req, res) => {
 
 const getPendingOutboundRequests = async (req, res) => {
     try {
+        const period = req.query.period || 'month';
+        const dateSql = buildDateFilter(period, 's.created_at');
         const query = `
             SELECT
                 s.id, s.order_no, s.order_date, s.expected_delivery_date,
@@ -91,12 +98,12 @@ const getPendingOutboundRequests = async (req, res) => {
             LEFT JOIN customers c ON s.customer_id = c.id
             LEFT JOIN sales_order_items soi ON s.id = soi.order_id
             LEFT JOIN products p ON soi.product_id = p.id
-            WHERE s.status IN ('warehouse_processing', 'shipping', 'completed', 'returned', 'canceled', 'waiting_sales', 'customer_rejected', 'return_pending')
+            WHERE (s.status IN ('warehouse_processing', 'shipping', 'completed', 'returned', 'canceled', 'waiting_sales', 'customer_rejected', 'return_pending')
                 OR EXISTS (
                     SELECT 1 FROM delivery_requests d
                     WHERE d.order_id = s.id
                         AND COALESCE(d.status, '') IN ('warehouse_processing', 'shipping', 'completed', 'waiting_sales', 'customer_rejected', 'return_pending')
-                )
+                )) ${dateSql}
             GROUP BY s.id, c.id
             ORDER BY s.updated_at DESC, s.id DESC
         `;

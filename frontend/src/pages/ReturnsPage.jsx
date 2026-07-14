@@ -72,6 +72,7 @@ export default function ReturnsPage() {
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState('returns'); // 'returns' | 'compensations'
+  const [period, setPeriod] = useState('month');
   const [searchTerm, setSearchTerm] = useState('');
   const [sourceFilter, setSourceFilter] = useState(''); // '' | 'during_delivery' | 'after_delivery'
   const [compFilter, setCompFilter] = useState(''); // '' | 'pending' | 'approved'
@@ -126,8 +127,8 @@ export default function ReturnsPage() {
   const fetchData = async () => {
     try {
       const [retRes, compRes] = await Promise.all([
-        api.get('/returns'),
-        api.get('/returns/compensations'),
+        api.get(`/returns?period=${period}`),
+        api.get(`/returns/compensations?period=${period}`),
       ]);
       setReturns(Array.isArray(retRes.data) ? retRes.data : []);
       setCompensations(Array.isArray(compRes.data) ? compRes.data : []);
@@ -142,7 +143,7 @@ export default function ReturnsPage() {
     fetchData();
     const t = window.setTimeout(() => setMounted(true), 40);
     return () => window.clearTimeout(t);
-  }, []);
+  }, [period]);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -501,9 +502,21 @@ export default function ReturnsPage() {
         }
       `}</style>
       <div style={PAGE_STYLES.shell}>
-        <div style={{ marginBottom: '22px' }}>
-          <h2 style={PAGE_STYLES.heroTitle(fs)}>Xử lý hàng hoàn / lỗi</h2>
-          <p style={PAGE_STYLES.heroSub}>Danh sách hàng khách không nhận hoặc lỗi cần xử lý.</p>
+        <div style={{ marginBottom: '22px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+          <div>
+            <h2 style={PAGE_STYLES.heroTitle(fs)}>Xử lý hàng hoàn / lỗi</h2>
+            <p style={PAGE_STYLES.heroSub}>Danh sách hàng khách không nhận hoặc lỗi cần xử lý.</p>
+          </div>
+          <select
+            value={period}
+            onChange={(e) => setPeriod(e.target.value)}
+            style={{ padding: '10px 14px', borderRadius: '12px', border: '1px solid #e2e8f0', background: '#fff', color: '#334155', fontWeight: 600, outline: 'none' }}
+          >
+            <option value="day">Hôm nay</option>
+            <option value="month">Tháng này</option>
+            <option value="quarter">Quý này</option>
+            <option value="all">Tất cả thời gian</option>
+          </select>
         </div>
 
         {/* Stats */}

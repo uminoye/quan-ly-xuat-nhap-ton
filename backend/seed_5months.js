@@ -51,9 +51,9 @@ const weightedPick = (items) => {
 
 const fmtDate = (d) => d.toISOString().slice(0, 19).replace('T', ' ');
 
-// Random date trong khoảng 03/2026 → 10/07/2026
+// Random date trong khoảng 03/2026 → 14/07/2026
 const START = new Date('2026-03-01T00:00:00');
-const END   = new Date('2026-07-10T23:59:59');
+const END   = new Date('2026-07-14T23:59:59');
 const randomDate = () => new Date(START.getTime() + Math.random() * (END.getTime() - START.getTime()));
 
 // Tránh cuối tuần (chủ nhật) - giảm tần suất

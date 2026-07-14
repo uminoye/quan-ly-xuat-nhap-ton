@@ -383,6 +383,8 @@ const processCustomerRejection = async (req, res) => {
 
 const getShippingOrders = async (req, res) => {
   try {
+    const period = req.query.period || 'month';
+    const dateSql = buildDateFilter(period, 'sh.created_at');
     const result = await db.getAll(`
       SELECT
         sh.id, sh.order_id, sh.carrier_code, sh.carrier_name, sh.tracking_no,
@@ -392,6 +394,7 @@ const getShippingOrders = async (req, res) => {
       FROM shipping_orders sh
       JOIN sales_orders so ON sh.order_id = so.id
       JOIN customers c ON so.customer_id = c.id
+      WHERE 1=1 ${dateSql}
       ORDER BY sh.created_at DESC
     `);
     res.status(200).json(result);
@@ -400,8 +403,12 @@ const getShippingOrders = async (req, res) => {
   }
 };
 
+const { buildDateFilter } = require('../utils/dateFilter');
+
 const getReturnRequests = async (req, res) => {
   try {
+    const period = req.query.period || 'month';
+    const dateSql = buildDateFilter(period, 'rr.created_at');
     const result = await db.getAll(`
       SELECT
         rr.id, rr.order_id, rr.customer_reject_reason, rr.complaint_source,
@@ -411,6 +418,7 @@ const getReturnRequests = async (req, res) => {
       FROM return_requests rr
       JOIN sales_orders so ON rr.order_id = so.id
       JOIN customers c ON so.customer_id = c.id
+      WHERE 1=1 ${dateSql}
       ORDER BY rr.created_at DESC
     `);
     res.status(200).json(result);

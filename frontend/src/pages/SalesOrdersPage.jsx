@@ -79,6 +79,7 @@ export default function SalesOrdersPage() {
     const [orders, setOrders] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
+    const [period, setPeriod] = useState('month');
     const [editingId, setEditingId] = useState(null);
     const [orderNo, setOrderNo] = useState('');
     const [customerId, setCustomerId] = useState('');
@@ -125,7 +126,7 @@ export default function SalesOrdersPage() {
             const [c, p, o] = await Promise.all([
                 api.get('/customers'),
                 api.get('/products'),
-                api.get('/orders'),
+                api.get(`/orders?period=${period}`),
             ]);
             setCustomers(c.data);
             setProducts(p.data);
@@ -152,7 +153,7 @@ export default function SalesOrdersPage() {
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, []);
+    }, [period]);
 
     // ── Computed ──────────────────────────────────────────────────────────────
     const filteredOrders = useMemo(() => {
@@ -430,6 +431,16 @@ export default function SalesOrdersPage() {
                         </p>
                     </div>
                     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                        <select
+                            value={period}
+                            onChange={(e) => setPeriod(e.target.value)}
+                            style={{ padding: '10px 14px', borderRadius: 10, border: '1px solid #cbd5e1', background: '#fff', outline: 'none', color: '#334155', fontWeight: 600 }}
+                        >
+                            <option value="day">Hôm nay</option>
+                            <option value="month">Tháng này</option>
+                            <option value="quarter">Quý này</option>
+                            <option value="all">Tất cả thời gian</option>
+                        </select>
                         <button type="button" onClick={async () => {
                             const rows = filteredOrders.map(o => {
                                 const total = calcTotal(o);

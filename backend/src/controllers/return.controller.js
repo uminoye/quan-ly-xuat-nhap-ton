@@ -23,12 +23,14 @@ async function addInventory(client, warehouseId, productId, qty, refType, refId,
 // ============================================================
 const getAllReturns = async (req, res) => {
     try {
-        const { action } = req.query;
+        const { action, period = 'month' } = req.query;
         let whereClause = `WHERE (rr.status IN ('return_pending', 'return_completed', 'pending', 'logistics_handled', 'return_to_sales'))`;
 
         if (action) {
             whereClause += ` AND rr.logistics_action = '${action}'`;
         }
+        const dateSql = require('../utils/dateFilter').buildDateFilter(period, 'rr.created_at');
+        whereClause += dateSql;
 
         const result = await db.getAll(`
             SELECT
@@ -97,9 +99,11 @@ const getReturnByOrder = async (req, res) => {
 // ============================================================
 const getCompensations = async (req, res) => {
     try {
-        const { status } = req.query;
-        let whereClause = '';
-        if (status) whereClause = `WHERE cr.status = '${status}'`;
+        const { status, period = 'month' } = req.query;
+        let whereClause = 'WHERE 1=1';
+        if (status) whereClause += ` AND cr.status = '${status}'`;
+        const dateSql = require('../utils/dateFilter').buildDateFilter(period, 'cr.created_at');
+        whereClause += dateSql;
 
         const result = await db.getAll(`
             SELECT

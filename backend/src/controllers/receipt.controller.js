@@ -1,12 +1,17 @@
 const db = require('../config/database');
 
+const { buildDateFilter } = require('../utils/dateFilter');
+
 const getAllReceipts = async (req, res) => {
     try {
+        const period = req.query.period || 'month';
+        const dateSql = buildDateFilter(period, 'p.created_at');
         const rows = await db.getAll(`
             SELECT p.*, w.name as warehouse_name, u.full_name as creator_name
             FROM production_receipts p
             LEFT JOIN warehouses w ON p.warehouse_id = w.id
             LEFT JOIN users u ON p.created_by = u.id
+            WHERE 1=1 ${dateSql}
             ORDER BY p.id DESC
         `);
 

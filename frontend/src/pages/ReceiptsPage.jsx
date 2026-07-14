@@ -37,6 +37,7 @@ export default function ReceiptsPage() {
   const [tableLoading, setTableLoading] = useState(true);
   const [tableReady, setTableReady] = useState(false);
   const [hoveredStat, setHoveredStat] = useState(null);
+  const [period, setPeriod] = useState('month');
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [warehouseId, setWarehouseId] = useState('');
@@ -73,7 +74,7 @@ export default function ReceiptsPage() {
     if (showTableLoading) setTableLoading(true);
 
     try {
-      const [recRes, prodRes, whRes] = await Promise.all([api.get('/receipts'), api.get('/products'), api.get('/warehouses/for-outbound')]);
+      const [recRes, prodRes, whRes] = await Promise.all([api.get(`/receipts?period=${period}`), api.get('/products'), api.get('/warehouses/for-outbound')]);
       setReceipts(recRes.data || []);
       setProducts(prodRes.data || []);
       setWarehouses(whRes.data || []);
@@ -87,7 +88,7 @@ export default function ReceiptsPage() {
     }
   };
 
-  useEffect(() => { fetchData({ showTableLoading: true }); }, []);
+  useEffect(() => { fetchData({ showTableLoading: true }); }, [period]);
 
   useEffect(() => {
     if (loading) {
@@ -365,6 +366,16 @@ export default function ReceiptsPage() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', marginBottom: '12px' }}>
           <h2 style={{ margin: 0, fontSize: '28px', color: '#0f172a', letterSpacing: '-0.02em' }}>Nhập kho</h2>
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <select
+              value={period}
+              onChange={(e) => setPeriod(e.target.value)}
+              style={{ padding: '10px 14px', borderRadius: '12px', border: '1px solid #dbe3ee', background: '#fff', color: '#334155', fontWeight: 600, outline: 'none' }}
+            >
+              <option value="day">Hôm nay</option>
+              <option value="month">Tháng này</option>
+              <option value="quarter">Quý này</option>
+              <option value="all">Tất cả thời gian</option>
+            </select>
             <button onClick={handleRefresh} disabled={refreshing} style={{ background: '#fff', border: '1px solid #dbe3ee', borderRadius: '12px', padding: '10px 16px', fontWeight: 700, cursor: refreshing ? 'wait' : 'pointer', boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)', display: 'inline-flex', alignItems: 'center', gap: '8px', opacity: refreshing ? 0.85 : 1, fontFamily: 'inherit', transition: 'transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background 160ms ease, filter 160ms ease' }}
               onMouseEnter={(e) => {
                 if (refreshing) return;
