@@ -38,6 +38,11 @@ function StatCard({ label, value, accent, icon }) {
 export default function ReportsPage() {
   const user = JSON.parse(sessionStorage.getItem('user') || '{}');
   const roleId = user?.role_id;
+  const isAdmin = roleId === 1 || !roleId;
+  
+  const defaultTab = isAdmin ? 'sales' : (roleId === 2 ? 'sales' : roleId === 3 ? 'logistics' : roleId === 4 ? 'warehouse' : roleId === 5 ? 'factory' : 'inventory');
+  
+  const [activeTab, setActiveTab] = useState(defaultTab);
   const [period, setPeriod] = useState('month');
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
@@ -55,12 +60,12 @@ export default function ReportsPage() {
       setError('');
       try {
         let res;
-        switch (roleId) {
-          case 2: res = await getSalesReport(period); break;
-          case 3: res = await getLogisticsReport(period); break;
-          case 4: res = await getWarehouseReport(period); break;
-          case 5: res = await getFactoryReport(period); break;
-          default: res = await getInventoryReport(); break;
+        switch (activeTab) {
+          case 'sales': res = await getSalesReport(period); break;
+          case 'logistics': res = await getLogisticsReport(period); break;
+          case 'warehouse': res = await getWarehouseReport(period); break;
+          case 'factory': res = await getFactoryReport(period); break;
+          case 'inventory': default: res = await getInventoryReport(); break;
         }
         setData(res || {});
       } catch (err) {
@@ -70,10 +75,19 @@ export default function ReportsPage() {
         setLoading(false);
       }
     })();
-  }, [roleId, period]);
+  }, [activeTab, period]);
 
-  const roleTitle = roleId === 1 ? 'Báo cáo Tổng quan' : roleId === 2 ? 'Báo cáo Doanh thu (Sales)' : roleId === 3 ? 'Báo cáo Vận chuyển (Logistics)' : roleId === 4 ? 'Báo cáo Kho (Warehouse)' : roleId === 5 ? 'Báo cáo Sản xuất (Nhà máy)' : 'Báo cáo';
-  const roleColor = roleId === 1 ? '#2563eb' : roleId === 2 ? '#10b981' : roleId === 3 ? '#f97316' : roleId === 4 ? '#7c3aed' : roleId === 5 ? '#f59e0b' : '#64748b';
+  const tabConfig = {
+    sales: { title: 'Doanh thu', color: '#10b981', icon: 'ri-line-chart-line' },
+    logistics: { title: 'Vận chuyển', color: '#f97316', icon: 'ri-truck-line' },
+    warehouse: { title: 'Kho bãi', color: '#7c3aed', icon: 'ri-archive-line' },
+    factory: { title: 'Sản xuất', color: '#f59e0b', icon: 'ri-building-4-line' },
+    inventory: { title: 'Tồn kho', color: '#2563eb', icon: 'ri-stack-line' },
+  };
+
+  const currentTabInfo = tabConfig[activeTab] || tabConfig.inventory;
+  const roleTitle = isAdmin ? 'Báo cáo Tổng hợp' : `Báo cáo ${currentTabInfo.title}`;
+  const roleColor = currentTabInfo.color;
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', color: '#94a3b8' }}>
@@ -433,20 +447,20 @@ export default function ReportsPage() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 18 }}>
           <div>
             <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, color: '#0f172a' }}>{roleTitle}</h1>
-            <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: 13 }}>Chu kỳ: <strong>{data?.period || 'Tất cả'}</strong></p>
+            {activeTab !== 'inventory' && <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: 13 }}>Chu kỳ: <strong>{data?.period || 'Tất cả'}</strong></p>}
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            {PERIOD_OPTIONS.map(p => (
+            {activeTab !== 'inventory' && PERIOD_OPTIONS.map(p => (
               <button key={p.value} onClick={() => setPeriod(p.value)}
                 style={{ padding: '8px 14px', borderRadius: 10, border: '1px solid #dbe3ee', background: period === p.value ? roleColor : '#fff', color: period === p.value ? '#fff' : '#475569', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>
                 {p.label}
               </button>
             ))}
             <button
-              onClick={() => roleId === 1 || !roleId ? exportInventoryReport(data)
-                : roleId === 2 ? exportSalesReport(data)
-                : roleId === 3 ? exportLogisticsReport(data)
-                : roleId === 4 ? exportWarehouseReport(data)
+              onClick={() => activeTab === 'inventory' ? exportInventoryReport(data)
+                : activeTab === 'sales' ? exportSalesReport(data)
+                : activeTab === 'logistics' ? exportLogisticsReport(data)
+                : activeTab === 'warehouse' ? exportWarehouseReport(data)
                 : exportFactoryReport(data)}
               style={{ padding: '8px 16px', borderRadius: 10, border: '1px solid #dbe3ee', background: '#fff', color: roleColor, fontWeight: 700, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 5 }}>
               <i className="ri-file-excel-2-line" style={{ fontSize: 15 }} />Xuất Excel
@@ -454,13 +468,35 @@ export default function ReportsPage() {
           </div>
         </div>
 
+        {isAdmin && (
+          <div style={{ display: 'flex', gap: 10, marginBottom: 24, overflowX: 'auto', paddingBottom: 4 }}>
+            {Object.entries(tabConfig).map(([key, info]) => (
+              <button
+                key={key}
+                onClick={() => setActiveTab(key)}
+                style={{
+                  padding: '10px 18px', borderRadius: 12, border: 'none',
+                  background: activeTab === key ? info.color : '#fff',
+                  color: activeTab === key ? '#fff' : '#475569',
+                  fontWeight: 700, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                  boxShadow: activeTab === key ? `0 8px 16px ${info.color}40` : '0 2px 8px rgba(15,23,42,0.04)',
+                  transition: 'all 200ms ease', whiteSpace: 'nowrap'
+                }}
+              >
+                <i className={info.icon} style={{ fontSize: 16 }} />
+                {info.title}
+              </button>
+            ))}
+          </div>
+        )}
+
         {error ? (
           <div style={{ padding: 24, color: '#b91c1c', background: '#fee2e2', borderRadius: 16, border: '1px solid #fecaca' }}>{error}</div>
-        ) : roleId === 1 || !roleId ? renderInventoryReport() :
-          roleId === 2 ? renderSalesReport() :
-          roleId === 3 ? renderLogisticsReport() :
-          roleId === 4 ? renderWarehouseReport() :
-          roleId === 5 ? renderFactoryReport() :
+        ) : activeTab === 'inventory' ? renderInventoryReport() :
+          activeTab === 'sales' ? renderSalesReport() :
+          activeTab === 'logistics' ? renderLogisticsReport() :
+          activeTab === 'warehouse' ? renderWarehouseReport() :
+          activeTab === 'factory' ? renderFactoryReport() :
           <div style={{ padding: 24, color: '#64748b' }}>Không có báo cáo phù hợp với vai trò của bạn.</div>
         }
       </div>
