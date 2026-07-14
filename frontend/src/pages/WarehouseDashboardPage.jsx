@@ -8,6 +8,7 @@ const BLUE   = '#3b82f6';
 const RED    = '#ef4444';
 const ORANGE = '#f59e0b';
 const INDIGO = '#6366f1';
+const GREEN  = '#10b981';
 
 const fmtDate = (v) => { if (!v) return '--'; const d = new Date(v); return Number.isNaN(d.getTime()) ? '--' : d.toLocaleDateString('vi-VN'); };
 

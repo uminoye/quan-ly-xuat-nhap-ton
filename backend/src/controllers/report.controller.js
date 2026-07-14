@@ -6,13 +6,13 @@ const toNumber = (value) => Number(value || 0);
 const buildDateFilter = (period) => {
     switch (period) {
         case 'day':
-            return { label: 'Hôm nay', sql: "created_at >= CURRENT_DATE" };
+            return { label: 'Hôm nay', sql: "created_at BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '1 day' - INTERVAL '1 second'" };
         case 'week':
-            return { label: 'Tuần này', sql: "created_at >= DATE_TRUNC('week', CURRENT_DATE)" };
+            return { label: 'Tuần này', sql: "created_at BETWEEN DATE_TRUNC('week', CURRENT_DATE) AND DATE_TRUNC('week', CURRENT_DATE) + INTERVAL '1 week' - INTERVAL '1 second'" };
         case 'month':
-            return { label: 'Tháng này', sql: "created_at >= DATE_TRUNC('month', CURRENT_DATE)" };
+            return { label: 'Tháng này', sql: "created_at BETWEEN DATE_TRUNC('month', CURRENT_DATE) AND DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month' - INTERVAL '1 second'" };
         case 'quarter':
-            return { label: 'Quý này', sql: "created_at >= CURRENT_DATE - INTERVAL '3 months'" };
+            return { label: 'Quý này', sql: "created_at BETWEEN DATE_TRUNC('quarter', CURRENT_DATE) AND DATE_TRUNC('quarter', CURRENT_DATE) + INTERVAL '3 months' - INTERVAL '1 second'" };
         default:
             return { label: 'Tất cả', sql: null };
     }
