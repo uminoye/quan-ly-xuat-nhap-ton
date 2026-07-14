@@ -1,159 +1,253 @@
-import { useEffect, useState } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  Area, AreaChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis
+} from 'recharts';
+import api from '../services/api';
 
-const fmtNum = (v) => new Intl.NumberFormat('vi-VN').format(Number(v || 0));
-const PIE_COLORS = ['#2563eb', '#0ea5e9', '#10b981', '#7c3aed', '#f59e0b', '#ef4444'];
+const BLUE   = '#3b82f6';
+const RED    = '#ef4444';
+const ORANGE = '#f59e0b';
+const INDIGO = '#6366f1';
 
-function cardStyle(hovered, accent = '#2563eb') {
-  return {
-    background: '#fff', borderRadius: 20, padding: '18px 20px',
-    border: hovered ? `1.5px solid ${accent}55` : '1px solid #e0e7ff',
-    boxShadow: hovered ? `0 18px 44px ${accent}18` : '0 10px 30px rgba(15,23,42,0.05)',
-    transition: 'all 220ms ease', transform: hovered ? 'translateY(-5px)' : 'translateY(0)',
-  };
+const fmtDate = (v) => { if (!v) return '--'; const d = new Date(v); return Number.isNaN(d.getTime()) ? '--' : d.toLocaleDateString('vi-VN'); };
+
+const PERIODS = [
+  { value: 'day',     label: 'Hôm nay' },
+  { value: 'month',   label: 'Tháng này' },
+  { value: 'quarter', label: 'Quý này' },
+  { value: 'all',     label: 'Tất cả' },
+];
+
+function KPI({ label, value, sub, accent, icon }) {
+  return (
+    <div style={{
+      background: '#fff', borderRadius: 20, padding: 24,
+      border: '1px solid #f1f5f9',
+      boxShadow: '0 10px 25px rgba(15,23,42,0.03)',
+      position: 'relative', overflow: 'hidden',
+      transition: 'transform 200ms ease, box-shadow 200ms ease',
+      cursor: 'pointer'
+    }}
+    onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = `0 20px 40px ${accent}20`; }}
+    onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 10px 25px rgba(15,23,42,0.03)'; }}
+    >
+      <div style={{ position: 'absolute', right: -20, top: -20, width: 90, height: 90, borderRadius: '50%', background: `${accent}15`, opacity: 0.8 }} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+        <div style={{ width: 44, height: 44, borderRadius: 14, background: accent, color: '#fff', display: 'grid', placeItems: 'center', fontSize: 20, boxShadow: `0 8px 16px ${accent}33` }}>
+          <i className={icon} />
+        </div>
+        <span style={{ fontSize: 13, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</span>
+      </div>
+      <div style={{ fontSize: 28, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em', lineHeight: 1.2 }}>{value}</div>
+      {sub && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 6, fontWeight: 500 }}>{sub}</div>}
+    </div>
+  );
+}
+
+function ChartCard({ title, subtitle, children }) {
+  return (
+    <div style={{ background: '#fff', borderRadius: 24, padding: 24, border: '1px solid #f1f5f9', boxShadow: '0 10px 30px rgba(15,23,42,0.02)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+        <div>
+          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.01em' }}>{title}</h3>
+          {subtitle && <div style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>{subtitle}</div>}
+        </div>
+      </div>
+      {children}
+    </div>
+  );
 }
 
 export default function WarehouseDashboardPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('month');
-  const [hover, setHover] = useState(null);
   const [mounted, setMounted] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    const raf = requestAnimationFrame(() => setMounted(true));
-    return () => cancelAnimationFrame(raf);
+    requestAnimationFrame(() => setMounted(true));
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
+      setLoading(true); setError('');
       try {
-        const res = await fetch(`/api/reports/dashboard?period=${period}`, { headers: { Authorization: `Bearer ${sessionStorage.getItem('accessToken')}` } });
-        const json = await res.json();
-        setData(json);
-      } catch (e) { console.error(e); }
-      finally { setLoading(false); }
+        const res = await api.get(`/reports/dashboard?period=${period}`);
+        if (!cancelled) setData(res.data);
+      } catch (e) {
+        if (!cancelled) setError('Không thể tải dữ liệu dashboard.');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     })();
+    return () => { cancelled = true; };
   }, [period]);
 
   const s = data?.summary || {};
-  const whBreakdown = Array.isArray(data?.tables?.warehouse_breakdown) ? data.tables.warehouse_breakdown : [];
   const lowStock = Array.isArray(data?.tables?.low_stock_products) ? data.tables.low_stock_products : [];
   const recentReceipts = Array.isArray(data?.tables?.recent_receipts) ? data.tables.recent_receipts : [];
   const recentOutbounds = Array.isArray(data?.tables?.recent_outbounds) ? data.tables.recent_outbounds : [];
-  const recData = (data?.charts?.receipts_by_day || []).map(r => ({ ...r, receipts: Number(r.receipts || 0), name: r.date }));
-  const outData = (data?.charts?.outbounds_by_day || []).map(r => ({ ...r, outbounds: Number(r.outbounds || 0), name: r.date }));
 
-  const stats = [
-    { key: 'stock',    label: 'Loại SP có tồn',  value: s.total_product_types || 0,        accent: '#2563eb', icon: 'ri-box-3-line' },
-    { key: 'totalQty', label: 'Tổng tồn kho',    value: fmtNum(s.total_stock),              accent: '#0ea5e9', icon: 'ri-stack-line' },
-    { key: 'lowStock', label: 'Cảnh báo tồn thấp', value: s.low_stock_count || 0,            accent: '#ef4444', icon: 'ri-alert-line' },
-    { key: 'receipts', label: 'Phiếu nhập',       value: s.total_receipts || 0,              accent: '#10b981', icon: 'ri-inbox-archive-line' },
-    { key: 'outbounds',label: 'Phiếu xuất',       value: s.total_outbounds || 0,             accent: '#7c3aed', icon: 'ri-send-plane-line' },
-    { key: 'pendingRec',label:'Chờ nhập',          value: s.pending_receipts || 0,            accent: '#f59e0b', icon: 'ri-time-line' },
-    { key: 'pendingOut',label:'Chờ xuất',          value: s.pending_outbounds || 0,           accent: '#f97316', icon: 'ri-truck-line' },
-    { key: 'completed',label: 'Hoàn tất',         value: s.completed_receipts || 0,          accent: '#059669', icon: 'ri-check-line' },
-  ];
+  const recData = (data?.charts?.receipts_by_day || []).map(r => ({ name: fmtDate(r.date), receipts: Number(r.receipts || 0) }));
+  const outData = (data?.charts?.outbounds_by_day || []).map(r => ({ name: fmtDate(r.date), outbounds: Number(r.outbounds || 0) }));
 
-  if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', color: '#94a3b8' }}>
-      <i className="ri-loader-4-line" style={{ fontSize: 28, marginRight: 12, animation: 'spin 1s linear infinite' }} />Đang tải...
+  const dayLabels = useMemo(() => {
+    const map = new Map();
+    recData.forEach(r => map.set(r.name, { name: r.name, receipts: r.receipts, outbounds: 0 }));
+    outData.forEach(r => {
+      if (!map.has(r.name)) map.set(r.name, { name: r.name, receipts: 0, outbounds: r.outbounds });
+      else map.get(r.name).outbounds = r.outbounds;
+    });
+    return Array.from(map.values()).sort((a, b) => {
+      const da = a.name.split('/').reverse().join('-');
+      const db = b.name.split('/').reverse().join('-');
+      return da.localeCompare(db);
+    });
+  }, [recData, outData]);
+
+  if (loading && !data) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#f8fafc', color: '#94a3b8' }}>
+      <i className="ri-loader-4-line" style={{ fontSize: 32, marginRight: 12, animation: 'spin 1s linear infinite' }} />
+      <span style={{ fontSize: 16, fontWeight: 600 }}>Đang tổng hợp dữ liệu kho...</span>
+      <style>{`@keyframes spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 
   return (
-    <div style={{ padding: 20, minHeight: '100vh', background: 'linear-gradient(160deg, #f0fdf4, #f0f9ff 40%, #fafbff)', opacity: mounted ? 1 : 0, transition: 'opacity 320ms' }}>
-      <style>{`@keyframes spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }`}</style>
-
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 18 }}>
+    <div style={{ padding: '32px 40px', minHeight: '100vh', background: '#f8fafc', opacity: mounted ? 1 : 0, transition: 'opacity 400ms ease' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16, marginBottom: 32 }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, color: '#0f172a' }}>Dashboard Kho</h1>
-          <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: 13 }}>{data?.period || 'Tất cả'}</p>
+          <h1 style={{ margin: 0, fontSize: 28, fontWeight: 900, color: '#0f172a', letterSpacing: '-0.03em' }}>Warehouse Dashboard</h1>
+          <p style={{ margin: '6px 0 0', color: '#64748b', fontSize: 14 }}>Quản lý lưu lượng nhập xuất và tồn kho</p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {['day', 'month', 'quarter'].map(p => (
-            <button key={p} onClick={() => setPeriod(p)}
-              style={{ padding: '8px 14px', borderRadius: 10, border: '1px solid #dbe3ee', background: period === p ? '#2563eb' : '#fff', color: period === p ? '#fff' : '#475569', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>
-              {p === 'day' ? 'Ngày' : p === 'month' ? 'Tháng' : 'Quý'}
+        <div style={{ display: 'flex', gap: 4, background: '#fff', padding: 6, borderRadius: 14, boxShadow: '0 4px 15px rgba(0,0,0,0.02)' }}>
+          {PERIODS.map(p => (
+            <button
+              key={p.value}
+              onClick={() => setPeriod(p.value)}
+              style={{
+                padding: '10px 18px', borderRadius: 10, border: 'none',
+                background: period === p.value ? BLUE : 'transparent',
+                color: period === p.value ? '#fff' : '#64748b',
+                fontWeight: 600, cursor: 'pointer', fontSize: 13,
+                transition: 'all 200ms ease'
+              }}
+            >
+              {p.label}
             </button>
           ))}
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 14, marginBottom: 18 }}>
-        {stats.map(st => (
-          <div key={st.key} onMouseEnter={() => setHover(st.key)} onMouseLeave={() => setHover(null)} style={cardStyle(hover === st.key, st.accent)}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-              <div style={{ width: 38, height: 38, borderRadius: 12, background: st.accent, color: '#fff', display: 'grid', placeItems: 'center', fontSize: 18 }}>
-                <i className={st.icon} />
-              </div>
-              <span style={{ fontSize: 12, color: '#64748b', fontWeight: 700 }}>{st.label}</span>
+      {error && (
+        <div style={{ padding: 16, background: '#fee2e2', color: '#991b1b', borderRadius: 14, marginBottom: 24, fontWeight: 500 }}>
+          <i className="ri-error-warning-fill" style={{ marginRight: 8 }} />{error}
+        </div>
+      )}
+
+      {/* 4 Core KPIs */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 20, marginBottom: 24 }}>
+        <KPI label="Tổng tồn kho" value={Number(s.total_stock || 0).toLocaleString('vi-VN')} sub={`${s.total_product_types || 0} mã sản phẩm`} accent={BLUE} icon="ri-archive-fill" />
+        <KPI label="Cảnh báo sắp hết" value={s.low_stock_count || 0} sub="Sản phẩm dưới định mức" accent={RED} icon="ri-alert-fill" />
+        <KPI label="Chờ nhập kho" value={s.pending_receipts || 0} sub={`${s.total_receipts || 0} phiếu nhập trong kỳ`} accent={ORANGE} icon="ri-download-2-fill" />
+        <KPI label="Chờ xuất kho" value={s.pending_outbounds || 0} sub={`${s.total_outbounds || 0} phiếu xuất trong kỳ`} accent={INDIGO} icon="ri-upload-2-fill" />
+      </div>
+
+      {/* Main Chart */}
+      <div style={{ marginBottom: 24 }}>
+        <ChartCard title="Lưu lượng Nhập / Xuất" subtitle="So sánh số lượng phiếu nhập và phiếu xuất theo thời gian">
+          {dayLabels.length > 0 ? (
+            <ResponsiveContainer width="100%" height={320}>
+              <AreaChart data={dayLabels} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="gradRec" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={BLUE} stopOpacity={0.3} />
+                    <stop offset="100%" stopColor={BLUE} stopOpacity={0.0} />
+                  </linearGradient>
+                  <linearGradient id="gradOut" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={INDIGO} stopOpacity={0.3} />
+                    <stop offset="100%" stopColor={INDIGO} stopOpacity={0.0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} dy={10} />
+                <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  contentStyle={{ borderRadius: 16, border: 'none', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', padding: '12px 16px' }}
+                  labelStyle={{ fontWeight: 700, color: '#0f172a', marginBottom: 4 }}
+                />
+                <Legend wrapperStyle={{ fontSize: 13, paddingTop: 10 }} iconType="circle" />
+                <Area type="monotone" dataKey="receipts" name="Phiếu nhập" stroke={BLUE} strokeWidth={3} fill="url(#gradRec)" />
+                <Area type="monotone" dataKey="outbounds" name="Phiếu xuất" stroke={INDIGO} strokeWidth={3} fill="url(#gradOut)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : <div style={{ padding: 60, textAlign: 'center', color: '#94a3b8' }}>Chưa có dữ liệu trong kỳ này</div>}
+        </ChartCard>
+      </div>
+
+      {/* Tables Row */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 24 }}>
+        <ChartCard title="Sản phẩm dưới định mức" subtitle="Cần lên kế hoạch nhập hàng">
+          {lowStock.length === 0 ? (
+            <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Không có sản phẩm nào thiếu hụt</div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', whiteSpace: 'nowrap' }}>
+                <thead>
+                  <tr style={{ fontSize: 12, color: '#64748b', borderBottom: '2px solid #f1f5f9' }}>
+                    <th style={{ padding: '12px 0', textAlign: 'left', fontWeight: 600 }}>Sản phẩm</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: 600 }}>Tồn kho</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: 600 }}>Định mức</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lowStock.slice(0, 6).map(p => (
+                    <tr key={p.sku} style={{ borderBottom: '1px solid #f8fafc' }}>
+                      <td style={{ padding: '14px 0', fontSize: 13 }}>
+                        <div style={{ fontWeight: 700, color: '#0f172a' }}>{p.name}</div>
+                        <div style={{ fontSize: 11, color: '#64748b' }}>{p.sku} • {p.warehouse_name}</div>
+                      </td>
+                      <td style={{ padding: '14px 16px', fontSize: 14, textAlign: 'center', fontWeight: 800, color: RED }}>{p.on_hand}</td>
+                      <td style={{ padding: '14px 16px', fontSize: 14, textAlign: 'center', fontWeight: 600, color: '#64748b' }}>{p.min_stock}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-            <div style={{ fontSize: 26, fontWeight: 800, color: '#0f172a' }}>{st.value}</div>
-          </div>
-        ))}
-      </div>
+          )}
+        </ChartCard>
 
-      {/* Charts */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 18 }}>
-        <div style={cardStyle(false, '#10b981')}>
-          <h3 style={{ margin: '0 0 14px', fontSize: 16, fontWeight: 800 }}>Nhập kho theo ngày</h3>
-          {recData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={recData}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e0e7ff" />
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} />
-                <Tooltip /><Bar dataKey="receipts" fill="#10b981" radius={[8, 8, 0, 0]} /></BarChart>
-            </ResponsiveContainer>
-          ) : <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Chưa có dữ liệu</div>}
-        </div>
-        <div style={cardStyle(false, '#7c3aed')}>
-          <h3 style={{ margin: '0 0 14px', fontSize: 16, fontWeight: 800 }}>Xuất kho theo ngày</h3>
-          {outData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={outData}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e0e7ff" />
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} />
-                <Tooltip /><Bar dataKey="outbounds" fill="#7c3aed" radius={[8, 8, 0, 0]} /></BarChart>
-            </ResponsiveContainer>
-          ) : <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Chưa có dữ liệu</div>}
-        </div>
-      </div>
-
-      {/* Tables */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-        <div style={cardStyle(false, '#ef4444')}>
-          <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 800 }}>Tồn kho thấp</h3>
-          {lowStock.length === 0 ? <div style={{ padding: 16, textAlign: 'center', color: '#94a3b8' }}>Kho đủ hàng</div> :
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead><tr style={{ fontSize: 12, color: '#94a3b8', borderBottom: '1px solid #e0e7ff' }}>
-                <th style={{ padding: '6px 0', textAlign: 'left' }}>SKU</th><th style={{ padding: '6px 0' }}>Tồn</th><th style={{ padding: '6px 0' }}>Min</th><th style={{ padding: '6px 0', textAlign: 'left' }}>Kho</th>
-              </tr></thead>
-              <tbody>{lowStock.map((p, i) => (
-                <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                  <td style={{ padding: '7px 0', fontWeight: 700, fontSize: 13 }}>{p.sku}</td>
-                  <td style={{ padding: '7px 0', color: '#ef4444', fontWeight: 800, textAlign: 'center' }}>{p.on_hand || 0}</td>
-                  <td style={{ padding: '7px 0', color: '#94a3b8', textAlign: 'center' }}>{p.min_stock}</td>
-                  <td style={{ padding: '7px 0', fontSize: 12, color: '#64748b' }}>{p.warehouse_name || '—'}</td>
-                </tr>
-              ))}</tbody>
-            </table>
-          }
-        </div>
-
-        <div style={cardStyle(false, '#2563eb')}>
-          <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 800 }}>Hoạt động gần đây</h3>
-          <div style={{ display: 'grid', gap: 6 }}>
-            {recentReceipts.length === 0 && recentOutbounds.length === 0 ? (
-              <div style={{ padding: 16, textAlign: 'center', color: '#94a3b8' }}>Chưa có hoạt động</div>
-            ) : [...recentReceipts.map(r => ({ ...r, type: 'Nhập' })), ...recentOutbounds.map(r => ({ ...r, type: 'Xuất' }))].slice(0, 8).map((act, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderRadius: 12, background: '#f8fafc', border: '1px solid #e0e7ff', fontSize: 13 }}>
-                <div>
-                  <span style={{ fontWeight: 700, color: act.type === 'Nhập' ? '#10b981' : '#7c3aed', marginRight: 8 }}>{act.type}</span>
-                  <span>{act.receipt_no || act.outbound_no || '—'}</span>
+        <div style={{ display: 'grid', gap: 24 }}>
+          <ChartCard title="Hoạt động xuất/nhập kho gần đây" subtitle="Các phiếu đang chờ xử lý hoặc vừa hoàn thành">
+            <div style={{ display: 'grid', gap: 12 }}>
+              {recentReceipts.slice(0, 3).map(r => (
+                <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 12, borderRadius: 16, background: '#f8fafc' }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 12, background: `${BLUE}15`, color: BLUE, display: 'grid', placeItems: 'center', fontSize: 16 }}>
+                    <i className="ri-download-2-line" />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a' }}>{r.receipt_no}</div>
+                    <div style={{ fontSize: 11, color: '#64748b' }}>Nhập • {r.item_count} loại hàng</div>
+                  </div>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: r.status === 'completed' ? GREEN : ORANGE }}>{r.status === 'completed' ? 'Hoàn thành' : 'Đang chờ'}</span>
                 </div>
-                <span style={{ color: '#94a3b8', fontSize: 12 }}>{fmtDate(act.receipt_date || act.export_date)}</span>
-              </div>
-            ))}
-          </div>
+              ))}
+              {recentOutbounds.slice(0, 3).map(o => (
+                <div key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 12, borderRadius: 16, background: '#f8fafc' }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 12, background: `${INDIGO}15`, color: INDIGO, display: 'grid', placeItems: 'center', fontSize: 16 }}>
+                    <i className="ri-upload-2-line" />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a' }}>{o.outbound_no}</div>
+                    <div style={{ fontSize: 11, color: '#64748b' }}>Xuất • {o.item_count} loại hàng</div>
+                  </div>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: o.status === 'completed' ? GREEN : ORANGE }}>{o.status === 'completed' ? 'Hoàn thành' : 'Đang chờ'}</span>
+                </div>
+              ))}
+            </div>
+          </ChartCard>
         </div>
       </div>
     </div>

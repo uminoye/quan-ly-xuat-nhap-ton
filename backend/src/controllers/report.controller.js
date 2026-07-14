@@ -285,7 +285,7 @@ const getSalesDashboard = async (req, res) => {
                 FROM sales_orders o
                 JOIN sales_order_items oi ON oi.order_id = o.id
                 LEFT JOIN products p ON p.id = oi.product_id
-                WHERE o.created_by = $1 AND o.status = 'completed'
+                WHERE o.created_by = $1 AND o.status = 'completed' ${dateSql}
                 GROUP BY TO_CHAR(COALESCE(o.actual_delivery_date, o.updated_at, o.created_at), 'YYYY-MM-DD')
                 ORDER BY date ASC
             `, [userId]),
@@ -295,7 +295,7 @@ const getSalesDashboard = async (req, res) => {
                 FROM sales_order_items oi
                 JOIN sales_orders o ON o.id = oi.order_id
                 JOIN products p ON p.id = oi.product_id
-                WHERE o.created_by = $1 AND o.status = 'completed'
+                WHERE o.created_by = $1 AND o.status = 'completed' ${dateSql}
                 GROUP BY p.id, p.name, p.sku
                 ORDER BY total_qty DESC LIMIT 5
             `, [userId]),
@@ -306,7 +306,7 @@ const getSalesDashboard = async (req, res) => {
                 FROM sales_orders o
                 JOIN customers c ON c.id = o.customer_id
                 LEFT JOIN sales_order_items oi ON oi.order_id = o.id
-                WHERE o.created_by = $1
+                WHERE o.created_by = $1 ${dateSql}
                 GROUP BY o.id, c.company_name
                 ORDER BY o.created_at DESC LIMIT 8
             `, [userId]),
@@ -315,7 +315,7 @@ const getSalesDashboard = async (req, res) => {
         const statusBreakdown = await db.getAll(`
             SELECT status, COUNT(*) as count
             FROM sales_orders
-            WHERE created_by = $1
+            WHERE created_by = $1 ${dateSql.replace('o.created_at', 'created_at')}
             GROUP BY status
         `, [userId]);
 
@@ -381,6 +381,7 @@ const getWarehouseDashboard = async (req, res) => {
                        COUNT(*) as receipts,
                        COALESCE(SUM((SELECT SUM(quantity) FROM production_receipt_items WHERE receipt_id = production_receipts.id)), 0) as total_qty
                 FROM production_receipts
+                WHERE 1=1 ${dateSql}
                 GROUP BY TO_CHAR(created_at, 'YYYY-MM-DD')
                 ORDER BY date ASC
             `),
@@ -388,7 +389,7 @@ const getWarehouseDashboard = async (req, res) => {
                 SELECT TO_CHAR(export_date, 'YYYY-MM-DD') as date,
                        COUNT(*) as outbounds
                 FROM stock_outbound_notes
-                WHERE export_date IS NOT NULL
+                WHERE export_date IS NOT NULL ${dateSql.replace('created_at', 'export_date')}
                 GROUP BY TO_CHAR(export_date, 'YYYY-MM-DD')
                 ORDER BY date ASC
             `),
@@ -489,7 +490,7 @@ const getLogisticsDashboard = async (req, res) => {
                 SELECT TO_CHAR(actual_delivery_date, 'YYYY-MM-DD') as date,
                        COUNT(*) as deliveries
                 FROM sales_orders
-                WHERE status = 'completed' AND actual_delivery_date IS NOT NULL
+                WHERE status = 'completed' AND actual_delivery_date IS NOT NULL ${dateSql.replace('created_at', 'actual_delivery_date')}
                 GROUP BY TO_CHAR(actual_delivery_date, 'YYYY-MM-DD')
                 ORDER BY date ASC
             `),
@@ -575,6 +576,7 @@ const getFactoryDashboard = async (req, res) => {
                 SELECT TO_CHAR(created_at, 'YYYY-MM-DD') as date,
                        COUNT(*) as receipts
                 FROM production_receipts
+                WHERE 1=1 ${dateSql}
                 GROUP BY TO_CHAR(created_at, 'YYYY-MM-DD')
                 ORDER BY date ASC
             `),
