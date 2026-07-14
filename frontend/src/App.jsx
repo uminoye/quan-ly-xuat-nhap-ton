@@ -18,13 +18,13 @@ import FactoryDashboardPage from './pages/FactoryDashboardPage';
 import ReturnsPage from './pages/ReturnsPage';
 
 const ProtectedRoute = ({ children }) => {
-  const token = localStorage.getItem('accessToken');
+  const token = sessionStorage.getItem('accessToken');
   if (!token) return <Navigate to="/login" replace />;
   return children;
 };
 
 const HomeRedirect = () => {
-  const userStr = localStorage.getItem('user');
+  const userStr = sessionStorage.getItem('user');
   if (!userStr) return <Navigate to="/login" replace />;
   const user = JSON.parse(userStr);
   const roleId = user.role_id;

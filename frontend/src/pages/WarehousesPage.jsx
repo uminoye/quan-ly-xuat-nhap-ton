@@ -259,7 +259,7 @@ export default function WarehousesPage() {
   const [whName, setWhName] = useState('');
   const [whLocation, setWhLocation] = useState('');
 
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const user = JSON.parse(sessionStorage.getItem('user') || '{}');
   const canEdit = user?.role_id === 1 || user?.role_id === 4;
 
   // ---- Fetch data ----

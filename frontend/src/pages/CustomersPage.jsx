@@ -34,7 +34,7 @@ const BASE_BTN = {
 };
 
 export default function CustomersPage() {
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const user = JSON.parse(sessionStorage.getItem('user') || '{}');
     const roleId = user?.role_id || 0;
     // Admin (1) + Sales (2): full quyền; Logistics (3): chỉ xem
     const canEdit = [1, 2].includes(roleId);

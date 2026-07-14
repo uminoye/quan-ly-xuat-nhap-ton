@@ -24,8 +24,8 @@ export default function LoginPage() {
     e.preventDefault();
     try {
       const res = await api.post('/auth/login', { email, password });
-      localStorage.setItem('accessToken', res.data.accessToken);
-      localStorage.setItem('user', JSON.stringify(res.data.user));
+      sessionStorage.setItem('accessToken', res.data.accessToken);
+      sessionStorage.setItem('user', JSON.stringify(res.data.user));
       window.location.href = '/';
     } catch (err) {
       alert(err.response?.data?.message || 'Lỗi đăng nhập');

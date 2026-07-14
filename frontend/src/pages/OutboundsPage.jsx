@@ -3,7 +3,7 @@ import ExcelJS from 'exceljs';
 import api from '../services/api';
 
 export default function OutboundsPage() {
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const user = JSON.parse(sessionStorage.getItem('user') || '{}');
   const isAuthorized = [1, 4].includes(user?.role_id);
   const [orders, setOrders] = useState([]);
   const [warehouses, setWarehouses] = useState([]);

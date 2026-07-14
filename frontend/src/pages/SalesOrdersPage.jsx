@@ -71,7 +71,7 @@ const enrichItems = (items, products) =>
     });
 
 export default function SalesOrdersPage() {
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const user = JSON.parse(sessionStorage.getItem('user') || '{}');
     const isAuthorized = [1, 2].includes(user?.role_id);
 
     const [customers, setCustomers] = useState([]);

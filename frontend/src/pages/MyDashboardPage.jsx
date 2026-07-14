@@ -21,7 +21,7 @@ export default function SalesDashboardPage() {
   const [period, setPeriod] = useState('month');
   const [hover, setHover] = useState(null);
   const [mounted, setMounted] = useState(false);
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const user = JSON.parse(sessionStorage.getItem('user') || '{}');
 
   useEffect(() => {
     const raf = requestAnimationFrame(() => setMounted(true));

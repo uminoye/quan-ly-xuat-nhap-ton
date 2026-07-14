@@ -102,7 +102,7 @@ const CUSTOMER_REJECT_LABELS = {
 };
 
 export default function LogisticsPage() {
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const user = JSON.parse(sessionStorage.getItem('user') || '{}');
   const roleId = user?.role_id || 0;
   const isAuthorized = [1, 3].includes(roleId); // Admin (1) + Logistics (3)
 

@@ -28,7 +28,7 @@ export default function FactoryDashboardPage() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`/api/reports/dashboard?period=${period}`, { headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` } });
+        const res = await fetch(`/api/reports/dashboard?period=${period}`, { headers: { Authorization: `Bearer ${sessionStorage.getItem('accessToken')}` } });
         const json = await res.json();
         setData(json);
       } catch (e) { console.error(e); }

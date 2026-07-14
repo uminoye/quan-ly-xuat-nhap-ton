@@ -3,7 +3,7 @@ import ExcelJS from 'exceljs';
 import api from '../services/api';
 
 export default function ReceiptsPage() {
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const user = JSON.parse(sessionStorage.getItem('user') || '{}');
   const roleId = user?.role_id || 0;
   const isAdmin = roleId === 1;
   const isWarehouse = roleId === 4;

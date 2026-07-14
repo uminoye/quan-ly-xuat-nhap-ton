@@ -12,7 +12,7 @@ function getRoleLabel(user) {
 
 function safeParseUser() {
   try {
-    const raw = localStorage.getItem('user');
+    const raw = sessionStorage.getItem('user');
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
@@ -47,7 +47,7 @@ export default function MainLayout() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const user = useMemo(() => {
     try {
-      const raw = localStorage.getItem('user');
+      const raw = sessionStorage.getItem('user');
       if (!raw) return null;
       const parsed = JSON.parse(raw);
       // Normalize role_id to number so role checks work regardless of how it was stored
@@ -120,8 +120,8 @@ export default function MainLayout() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('user');
+    sessionStorage.removeItem('accessToken');
+    sessionStorage.removeItem('user');
     window.location.href = '/login';
   };
 

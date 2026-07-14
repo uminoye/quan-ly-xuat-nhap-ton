@@ -56,7 +56,7 @@ const formatDate = (v) => {
 };
 
 export default function ReturnsPage() {
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const user = JSON.parse(sessionStorage.getItem('user') || '{}');
   const roleId = user?.role_id || 0;
   const isAdmin = roleId === 1;
   const isSales = roleId === 2;

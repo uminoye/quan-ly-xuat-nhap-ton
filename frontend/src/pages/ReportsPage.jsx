@@ -36,7 +36,7 @@ function StatCard({ label, value, accent, icon }) {
 }
 
 export default function ReportsPage() {
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const user = JSON.parse(sessionStorage.getItem('user') || '{}');
   const roleId = user?.role_id;
   const [period, setPeriod] = useState('month');
   const [loading, setLoading] = useState(true);
