@@ -12,7 +12,7 @@ const buildDateFilter = (period) => {
         case 'month':
             return { label: 'Tháng này', sql: "created_at >= DATE_TRUNC('month', CURRENT_DATE)" };
         case 'quarter':
-            return { label: 'Quý này', sql: "created_at >= DATE_TRUNC('quarter', CURRENT_DATE)" };
+            return { label: 'Quý này', sql: "created_at >= CURRENT_DATE - INTERVAL '3 months'" };
         default:
             return { label: 'Tất cả', sql: null };
     }
