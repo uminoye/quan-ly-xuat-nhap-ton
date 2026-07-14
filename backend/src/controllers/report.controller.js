@@ -56,7 +56,7 @@ const getAdminDashboard = async (req, res) => {
                 FROM sales_orders o
                 JOIN sales_order_items oi ON oi.order_id = o.id
                 LEFT JOIN products p ON p.id = oi.product_id
-                WHERE o.status = 'completed'
+                WHERE o.status = 'completed' ${orderDateSql}
             `),
             db.getOne(`SELECT COUNT(*) as total FROM production_receipts WHERE 1=1 ${dateSql}`),
             db.getOne(`SELECT COUNT(*) as total FROM stock_outbound_notes WHERE 1=1 ${dateSql}`),
@@ -262,7 +262,7 @@ const getSalesDashboard = async (req, res) => {
                 FROM sales_orders o
                 JOIN sales_order_items oi ON oi.order_id = o.id
                 LEFT JOIN products p ON p.id = oi.product_id
-                WHERE o.created_by = $1 AND o.status = 'completed'
+                WHERE o.created_by = $1 AND o.status = 'completed' ${dateSql.replace('o.created_at', 'o.updated_at')}
             `, [userId]),
             db.getOne(`SELECT COUNT(*) as total FROM sales_orders o WHERE o.created_by = $1 AND o.status IN ('pending', 'warehouse_processing', 'waiting_sales', 'shipping') ${dateSql}`, [userId]),
             db.getOne(`
@@ -276,7 +276,7 @@ const getSalesDashboard = async (req, res) => {
                 FROM sales_orders o
                 JOIN sales_order_items oi ON oi.order_id = o.id
                 LEFT JOIN products p ON p.id = oi.product_id
-                WHERE o.created_by = $1 AND o.status = 'completed'
+                WHERE o.created_by = $1 AND o.status = 'completed' ${dateSql.replace('o.created_at', 'o.updated_at')}
             `, [userId]),
             db.getAll(`
                 SELECT TO_CHAR(COALESCE(o.actual_delivery_date, o.updated_at, o.created_at), 'YYYY-MM-DD') as date,
