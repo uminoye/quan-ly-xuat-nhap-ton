@@ -93,8 +93,8 @@ const styles = {
   cardBody: { padding: '20px' },
   cardTitle: { margin: 0, fontSize: '18px', fontWeight: 900, color: '#0f172a', letterSpacing: '-0.02em' },
   cardSubtitle: { margin: '8px 0 0', color: '#64748b', fontSize: '13px', lineHeight: 1.6 },
-  tableWrap: { overflowX: 'auto', width: '100%' },
-  table: { width: '100%', borderCollapse: 'separate', borderSpacing: 0 },
+  tableWrap: { overflowX: 'auto', width: '100%', WebkitOverflowScrolling: 'touch' },
+  table: { width: '100%', minWidth: '600px', borderCollapse: 'separate', borderSpacing: 0 },
   th: {
     textAlign: 'left',
     padding: '14px 16px',
@@ -353,7 +353,7 @@ export default function AccountsPage() {
           </div>
 
           <div style={styles.cardBody}>
-            <form onSubmit={handleSubmit} style={styles.formGrid}>
+            <form onSubmit={handleSubmit} className="acc-grid acc-grid-2">
               <div style={styles.field}>
                 <label style={styles.label}>Email đăng nhập</label>
                 <input
@@ -417,6 +417,20 @@ export default function AccountsPage() {
 
   return (
     <div style={{ ...styles.page, opacity: pageLoaded ? 1 : 0, transform: pageLoaded ? 'translateY(0)' : 'translateY(16px)', transition: 'opacity 320ms ease, transform 320ms ease' }}>
+      <style>{`
+        .acc-grid { display: grid; gap: 14px; }
+        .acc-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .acc-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .acc-grid-search { grid-template-columns: minmax(0, 1.3fr) minmax(240px, 0.7fr); gap: 12px; }
+        @media (max-width: 1024px) {
+          .acc-grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 768px) {
+          .acc-grid-3 { grid-template-columns: 1fr; }
+          .acc-grid-2 { grid-template-columns: 1fr; }
+          .acc-grid-search { grid-template-columns: 1fr; }
+        }
+      `}</style>
       <div style={styles.shell}>
         <div style={{ ...styles.hero, opacity: pageLoaded ? 1 : 0, transform: pageLoaded ? 'translateY(0)' : 'translateY(14px)', transition: 'opacity 420ms ease 80ms, transform 420ms ease 80ms' }}>
           <div>
@@ -444,7 +458,7 @@ export default function AccountsPage() {
           </div>
         </div>
 
-        <div style={styles.statGrid}>
+        <div className="acc-grid acc-grid-3" style={{ marginBottom: '22px' }}>
           {[
             { key: 'total', label: 'Tổng tài khoản', value: stats.total, desc: 'Toàn bộ người dùng đang có trong hệ thống.', tone: 'statBlue', icon: 'ri-user-3-line' },
             { key: 'admins', label: 'Quản trị viên', value: stats.admins, desc: 'Các tài khoản có quyền cao nhất.', tone: 'statAmber', icon: 'ri-shield-star-line' },
@@ -487,7 +501,7 @@ export default function AccountsPage() {
           <div style={styles.cardHeader}>
             <h3 style={styles.cardTitle}>Danh sách tài khoản</h3>
             <p style={styles.cardSubtitle}>Bảng thông tin được thiết kế tối giản nhưng giàu độ tương phản để dễ đọc và thao tác quản trị nhanh.</p>
-            <div style={{ marginTop: '14px', display: 'grid', gridTemplateColumns: 'minmax(0, 1.3fr) minmax(240px, 0.7fr)', gap: '12px' }}>
+            <div className="acc-grid acc-grid-search" style={{ marginTop: '14px' }}>
               <div style={{ position: 'relative' }}>
                 <i
                   className="ri-search-line"
