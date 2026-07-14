@@ -291,7 +291,7 @@ async function main() {
                 if (d > END) continue;
                 const status = weightedPick([
                     { value: 'pending', weight: 0.20 },
-                    { value: 'approved', weight: 0.70 },
+                    { value: 'processing', weight: 0.70 },
                     { value: 'rejected', weight: 0.05 },
                     { value: 'completed', weight: 0.05 },
                 ]);
