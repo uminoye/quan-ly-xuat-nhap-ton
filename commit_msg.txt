@@ -1,7 +1,8 @@
-fix: ReturnsPage shows orders processed from Logistics customer rejection
+fix(report): group revenueByMonth by correct time unit per period
 
-- Fix processCustomerRejection to INSERT return_requests if not exists
-- Fix getAllReturns to filter by so.status='return_pending'
-- Add action filter query param to ReturnsPage
-- Fix delivery simulation step 3 with manual confirm/fail buttons
-- Fix completed order modal to view-only (no action buttons)
+For revenueByMonth chart:
+- quarter/all: group by YYYY-MM (month) — shows monthly breakdown within quarter/year
+- day/week/month: group by YYYY-MM-DD (day) — shows daily bars within the period
+
+Previously revenueByMonth always grouped by month regardless of period,
+so quarter showed the same 12 months as all.

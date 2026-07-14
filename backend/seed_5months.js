@@ -24,6 +24,9 @@ if (!process.env.DATABASE_URL) {
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false },
+    // Giữ TCP connection sống qua Neon idle window
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10000,
 });
 
 const PASSWORD = '123456';
@@ -135,6 +138,10 @@ async function main() {
     const client = await pool.connect();
 
     try {
+        // Set statement-level timeouts để hang không bao giờ vĩnh viễn
+        await client.query(`SET statement_timeout = '120s'`);
+        await client.query(`SET idle_in_transaction_session_timeout = '600s'`);
+        await client.query(`SET lock_timeout = '30s'`);
         await client.query('BEGIN');
 
         // ========== 1) RESET DATA (giữ customers, users, warehouses, roles) ==========
@@ -210,24 +217,41 @@ async function main() {
         // ========== 3) INSERT PRODUCTS + SKU auto + tồn kho ban đầu ==========
         console.log('\n[3/5] Insert 25 san pham dien tu + SKU auto + ton kho...');
         const productIds = [];
-        for (let i = 0; i < ELECTRONIC_PRODUCTS.length; i++) {
-            const p = ELECTRONIC_PRODUCTS[i];
+        // Batch insert products
+        const productValues = [];
+        const productParams = [];
+        const productNames = [];
+        ELECTRONIC_PRODUCTS.forEach((p, i) => {
             const num = i + 1;
             const sku = `SP-2026-${String(num).padStart(4, '0')}`;
-            const ins = await client.query(
-                `INSERT INTO products (sku, name, unit, category, sale_price, min_stock)
-                 VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-                [sku, p.name, p.unit, p.category, p.sale_price, p.min_stock]
-            );
-            productIds.push({ id: ins.rows[0].id, ...p, sku });
-            await client.query(
-                `INSERT INTO auto_codes (code, prefix, year) VALUES ($1, 'SP', 2026) ON CONFLICT DO NOTHING`,
-                [sku]
-            );
-        }
+            const base = i * 6;
+            productValues.push(`($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6})`);
+            productParams.push(sku, p.name, p.unit, p.category, p.sale_price, p.min_stock);
+            productNames.push({ ...p, sku });
+        });
+        const prodRes = await client.query(
+            `INSERT INTO products (sku, name, unit, category, sale_price, min_stock)
+             VALUES ${productValues.join(', ')} RETURNING id, sku`,
+            productParams
+        );
+        // Map id by sku
+        const skuToId = {};
+        prodRes.rows.forEach(r => { skuToId[r.sku] = r.id; });
+        productNames.forEach((p) => {
+            productIds.push({ id: skuToId[p.sku], ...p });
+        });
+        // Batch insert auto_codes for products
+        const productCodes = productNames.map(p => p.sku);
+        await client.query(
+            `INSERT INTO auto_codes (code, prefix, year)
+             SELECT unnest($1::text[]), 'SP', 2026 ON CONFLICT DO NOTHING`,
+            [productCodes]
+        );
         console.log(`   ✓ ${productIds.length} san pham`);
 
         // Tồn kho ban đầu: cho mỗi sản phẩm ở mỗi kho với qty ngẫu nhiên
+        const invValues = [];
+        const invParams = [];
         for (const p of productIds) {
             for (const whId of WAREHOUSE_IDS) {
                 const isMain = whId === WAREHOUSE_IDS[0];
@@ -235,13 +259,15 @@ async function main() {
                     isMain ? Math.floor(p.min_stock * 0.8) : 5,
                     isMain ? p.min_stock * 3 : Math.floor(p.min_stock * 0.6)
                 );
-                await client.query(
-                    `INSERT INTO inventory_balances (warehouse_id, product_id, on_hand_qty)
-                     VALUES ($1, $2, $3)`,
-                    [whId, p.id, qty]
-                );
+                const base = invParams.length;
+                invValues.push(`($${base+1},$${base+2},$${base+3})`);
+                invParams.push(whId, p.id, qty);
             }
         }
+        await client.query(
+            `INSERT INTO inventory_balances (warehouse_id, product_id, on_hand_qty) VALUES ${invValues.join(', ')}`,
+            invParams
+        );
         console.log(`   ✓ Ton kho ban dau: ${productIds.length} SP × ${WAREHOUSE_IDS.length} kho`);
 
         // ========== 4) SEED DATA 5 THÁNG ==========
@@ -256,16 +282,13 @@ async function main() {
             { y: 2026, m: 6, count: rand(50, 65) },
             { y: 2026, m: 7, count: rand(15, 22) },
         ];
-        let receiptCount = 0;
-        let receiptItemCount = 0;
-        let receiptNos = [];
+        // GOM TẤT CẢ receipt + items vào mảng trước, rồi batch insert
+        const receiptRows = []; // mỗi row là {rno, whId, d, status, items: [{product_id, qty}]}
         for (const mth of months) {
             for (let i = 0; i < mth.count; i++) {
                 const day = rand(1, 28);
                 const d = new Date(Date.UTC(mth.y, mth.m - 1, day, rand(8, 17), rand(0, 59)));
                 if (d > END) continue;
-                const num = receiptCount + 1;
-                const rno = `YC-2026-${String(num).padStart(4, '0')}`;
                 const status = weightedPick([
                     { value: 'pending', weight: 0.20 },
                     { value: 'approved', weight: 0.70 },
@@ -273,54 +296,150 @@ async function main() {
                     { value: 'completed', weight: 0.05 },
                 ]);
                 const whId = pick(WAREHOUSE_IDS);
-                // responded_by is VARCHAR(100) — store user's full_name instead of id
                 const respondedByName = status === 'pending' ? null : 'Pham Thu Kho';
-                const ins = await client.query(
-                    `INSERT INTO production_receipts (receipt_no, warehouse_id, receipt_date, created_by, status, note, responded_by)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-                    [rno, whId, fmtDate(d), USER_IDS.warehouse, status, 'Yeu cau nhap hang tu nha may', respondedByName]
-                );
-                const receiptId = ins.rows[0].id;
-                receiptNos.push({ id: receiptId, no: rno, date: d, status, whId });
-                await client.query(
-                    `INSERT INTO auto_codes (code, prefix, year) VALUES ($1, 'YC', 2026) ON CONFLICT DO NOTHING`,
-                    [rno]
-                );
-
-                // 2-6 items mỗi phiếu
                 const itemCount = rand(2, 6);
                 const used = new Set();
+                const items = [];
                 for (let j = 0; j < itemCount; j++) {
                     let p;
                     do { p = pick(productIds); } while (used.has(p.id));
                     used.add(p.id);
-                    const qty = rand(20, 200);
-                    await client.query(
-                        `INSERT INTO production_receipt_items (receipt_id, product_id, quantity) VALUES ($1, $2, $3)`,
-                        [receiptId, p.id, qty]
-                    );
-                    // Update tồn kho
-                    await client.query(
-                        `UPDATE inventory_balances SET on_hand_qty = on_hand_qty + $1, updated_at = CURRENT_TIMESTAMP
-                         WHERE product_id = $2 AND warehouse_id = $3`,
-                        [qty, p.id, whId]
-                    );
-                    // Ghi inventory transaction
-                    await client.query(
-                        `INSERT INTO inventory_transactions (warehouse_id, product_id, transaction_type, quantity, reference_type, reference_id, transaction_date, note)
-                         VALUES ($1, $2, 'receipt', $3, 'production_receipt', $4, $5, $6)`,
-                        [whId, p.id, qty, receiptId, fmtDate(d), `Nhap tu nha may - ${rno}`]
-                    );
-                    receiptItemCount++;
+                    items.push({ product_id: p.id, quantity: rand(20, 200) });
                 }
-                receiptCount++;
+                receiptRows.push({ d, status, whId, respondedByName, items });
             }
         }
+        // Gán rno và receiptId tạm
+        receiptRows.forEach((r, i) => { r.num = i + 1; r.rno = `YC-2026-${String(r.num).padStart(4, '0')}`; });
+
+        // Batch insert production_receipts
+        const REC_BATCH = 100;
+        let receiptCount = 0;
+        let receiptItemCount = 0;
+        // Mapping num -> real id from insert
+        const numToReceiptId = {};
+        for (let i = 0; i < receiptRows.length; i += REC_BATCH) {
+            const chunk = receiptRows.slice(i, i + REC_BATCH);
+            const valuesSql = [];
+            const params = [];
+            chunk.forEach((r, ri) => {
+                const base = ri * 7;
+                valuesSql.push(`($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7})`);
+                params.push(r.rno, r.whId, fmtDate(r.d), USER_IDS.warehouse, r.status, 'Yeu cau nhap hang tu nha may', r.respondedByName);
+            });
+            const ins = await client.query(
+                `INSERT INTO production_receipts (receipt_no, warehouse_id, receipt_date, created_by, status, note, responded_by)
+                 VALUES ${valuesSql.join(', ')} RETURNING id, receipt_no`,
+                params
+            );
+            const noToId = {};
+            ins.rows.forEach(row => { noToId[row.receipt_no] = row.id; });
+            chunk.forEach(r => { r.dbId = noToId[r.rno]; numToReceiptId[r.num] = r.dbId; });
+            receiptCount += chunk.length;
+            if (i % 500 === 0) console.log(`     receipts inserted: ${receiptCount}/${receiptRows.length}`);
+        }
+        console.log(`   ✓ Production receipts header: ${receiptCount}`);
+
+        // Batch insert auto_codes for receipts
+        await client.query(
+            `INSERT INTO auto_codes (code, prefix, year)
+             SELECT unnest($1::text[]), 'YC', 2026 ON CONFLICT DO NOTHING`,
+            [receiptRows.map(r => r.rno)]
+        );
+
+        // Batch insert production_receipt_items
+        const allReceiptItems = [];
+        receiptRows.forEach(r => {
+            r.items.forEach(it => allReceiptItems.push({ receipt_dbId: r.dbId, product_id: it.product_id, quantity: it.quantity }));
+        });
+        const ITEM_BATCH = 300;
+        for (let i = 0; i < allReceiptItems.length; i += ITEM_BATCH) {
+            const chunk = allReceiptItems.slice(i, i + ITEM_BATCH);
+            const valuesSql = [];
+            const params = [];
+            chunk.forEach((it, ri) => {
+                const base = ri * 3;
+                valuesSql.push(`($${base+1},$${base+2},$${base+3})`);
+                params.push(it.receipt_dbId, it.product_id, it.quantity);
+            });
+            await client.query(
+                `INSERT INTO production_receipt_items (receipt_id, product_id, quantity) VALUES ${valuesSql.join(', ')}`,
+                params
+            );
+            receiptItemCount += chunk.length;
+        }
+        console.log(`   ✓ Production receipt items: ${receiptItemCount}`);
+
+        // Batch insert inventory_transactions (receipt type) + bulk UPDATE inventory_balances
+        // Gom theo (whId, product_id) -> total qty
+        const invDelta = {}; // key: `${whId}|${product_id}` -> {whId,product_id,qty}
+        receiptRows.forEach(r => {
+            r.items.forEach(it => {
+                const k = `${r.whId}|${it.product_id}`;
+                if (!invDelta[k]) invDelta[k] = { whId: r.whId, product_id: it.product_id, qty: 0 };
+                invDelta[k].qty += it.quantity;
+            });
+        });
+        const invDeltaArr = Object.values(invDelta);
+        // UPDATE bằng CASE WHEN
+        if (invDeltaArr.length) {
+            const uVal = invDeltaArr.map((d, i) => {
+                const base = i * 3;
+                return `(product_id=$${base+1} AND warehouse_id=$${base+2})`;
+            });
+            const uParams = invDeltaArr.flatMap(d => [d.product_id, d.whId, d.qty]);
+            const cases = invDeltaArr.map((d, i) => {
+                const base = i * 3;
+                return `WHEN product_id=$${base+1} AND warehouse_id=$${base+2} THEN on_hand_qty + $${base+3}`;
+            }).join(' ');
+            const whens = invDeltaArr.map((d, i) => {
+                const base = i * 3;
+                return `(product_id=$${base+1} AND warehouse_id=$${base+2})`;
+            }).join(' OR ');
+            await client.query(
+                `UPDATE inventory_balances SET on_hand_qty = CASE ${cases} END, updated_at = CURRENT_TIMESTAMP WHERE ${whens}`,
+                uParams
+            );
+        }
+        // Batch insert inventory_transactions receipts
+        // Schema (id auto): warehouse_id, product_id, transaction_type, quantity, reference_type, reference_id, transaction_date
+        // We hardcode transaction_type='receipt' and reference_type='production_receipt' via literals, no 'note' column.
+        const invTxnValues = [];
+        const invTxnParams = [];
+        receiptRows.forEach(r => {
+            r.items.forEach((it) => {
+                const base = invTxnParams.length;
+                invTxnValues.push(`($${base+1},$${base+2},'receipt',$${base+3},'production_receipt',$${base+4},CURRENT_TIMESTAMP)`);
+                invTxnParams.push(r.whId, it.product_id, it.quantity, r.dbId);
+            });
+        });
+        const TXN_BATCH = 100;
+        const TXN_COLS = 4; // 4 params per row: whId, product_id, qty, ref_id  (literal 'receipt', literal 'production_receipt', CURRENT_TIMESTAMP)
+        for (let i = 0; i < invTxnValues.length; i += TXN_BATCH) {
+            const chunkRows = Math.min(TXN_BATCH, invTxnValues.length - i);
+            // Rebuild placeholders per chunk so $N numbering restarts at 1 (defensive).
+            const rowsSql = [];
+            for (let r = 0; r < chunkRows; r++) {
+                const b = r * TXN_COLS;
+                rowsSql.push(`($${b + 1}, $${b + 2}, 'receipt', $${b + 3}, 'production_receipt', $${b + 4}, CURRENT_TIMESTAMP)`);
+            }
+            const sliceStart = i * TXN_COLS;
+            const sliceEnd = (i + chunkRows) * TXN_COLS;
+            const chunkParams = invTxnParams.slice(sliceStart, sliceEnd);
+            await client.query(
+                `INSERT INTO inventory_transactions (warehouse_id, product_id, transaction_type, quantity, reference_type, reference_id, transaction_date)
+                 VALUES ${rowsSql.join(', ')}`,
+                chunkParams
+            );
+        }
+        console.log(`   ✓ Inventory transactions (receipts): ${invTxnValues.length}`);
         console.log(`   ✓ Production receipts: ${receiptCount} phieu, ${receiptItemCount} items`);
 
         // ----- 4b) SALES_ORDERS + ITEMS -----
         const orderCount = rand(700, 900);
-        const orderIds = [];
+        // Build toàn bộ orders in-memory trước
+        const ordersData = [];
+        const allOrderItems = [];
         for (let i = 0; i < orderCount; i++) {
             const d = randomBusinessDate();
             const num = i + 1;
@@ -339,7 +458,7 @@ async function main() {
                 do { p = pick(productIds); } while (used.has(p.id));
                 used.add(p.id);
                 const qty = rand(1, 12);
-                const unitPrice = p.sale_price * (0.95 + Math.random() * 0.1); // ±5%
+                const unitPrice = p.sale_price * (0.95 + Math.random() * 0.1);
                 items.push({ product_id: p.id, quantity: qty, unit_price: Math.round(unitPrice), name: p.name, sku: p.sku });
             }
             const deliveryStep = status === 'completed' ? 4
@@ -348,70 +467,209 @@ async function main() {
                 : status === 'returned' ? 4
                 : 0;
 
+            ordersData.push({
+                num, ono, custId, d, expectedDelivery, actualDelivery, status, deliveryStep, items,
+            });
+            items.forEach(it => allOrderItems.push({ num, ...it }));
+        }
+
+        // Batch insert sales_orders
+        const orderIds = []; // { id, no, date, expectedDelivery, actualDelivery, status, deliveryStep, custId, items }
+        const orderNumToId = {};
+        const ORD_BATCH = 100;
+        let insertedOrders = 0;
+        for (let i = 0; i < ordersData.length; i += ORD_BATCH) {
+            const chunk = ordersData.slice(i, i + ORD_BATCH);
+            const valuesSql = [];
+            const params = [];
+            chunk.forEach((o, ri) => {
+                const base = ri * 9;
+                valuesSql.push(`($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9})`);
+                params.push(
+                    o.ono, o.custId, fmtDate(o.d), fmtDate(o.expectedDelivery),
+                    o.actualDelivery ? fmtDate(o.actualDelivery) : null,
+                    USER_IDS.sales, o.status, o.deliveryStep, ''
+                );
+            });
             const ins = await client.query(
                 `INSERT INTO sales_orders (order_no, customer_id, order_date, expected_delivery_date, actual_delivery_date, created_by, status, delivery_step, note)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
-                [ono, custId, fmtDate(d), fmtDate(expectedDelivery), actualDelivery ? fmtDate(actualDelivery) : null, USER_IDS.sales, status, deliveryStep, '']
+                 VALUES ${valuesSql.join(', ')} RETURNING id, order_no`,
+                params
             );
-            const orderId = ins.rows[0].id;
-            orderIds.push({ id: orderId, no: ono, date: d, expectedDelivery, actualDelivery, status, deliveryStep, custId, items });
-            await client.query(
-                `INSERT INTO auto_codes (code, prefix, year) VALUES ($1, 'SO', 2026) ON CONFLICT DO NOTHING`,
-                [ono]
-            );
-            for (const it of items) {
-                await client.query(
-                    `INSERT INTO sales_order_items (order_id, product_id, quantity, unit_price) VALUES ($1, $2, $3, $4)`,
-                    [orderId, it.product_id, it.quantity, it.unit_price]
-                );
+            const noToId = {};
+            ins.rows.forEach(r => { noToId[r.order_no] = r.id; });
+            chunk.forEach(o => { o.dbId = noToId[o.ono]; orderNumToId[o.num] = o.dbId; });
+            insertedOrders += chunk.length;
+            if (i % 500 === 0) console.log(`     orders inserted: ${insertedOrders}/${ordersData.length}`);
+        }
+        ordersData.forEach(o => orderIds.push({
+            id: o.dbId, no: o.ono, date: o.d, expectedDelivery: o.expectedDelivery,
+            actualDelivery: o.actualDelivery, status: o.status, deliveryStep: o.deliveryStep, custId: o.custId, items: o.items,
+        }));
+        console.log(`   ✓ Sales orders header: ${orderIds.length}`);
+
+        // Batch insert auto_codes cho orders
+        await client.query(
+            `INSERT INTO auto_codes (code, prefix, year)
+             SELECT unnest($1::text[]), 'SO', 2026 ON CONFLICT DO NOTHING`,
+            [ordersData.map(o => o.ono)]
+        );
+
+        // Batch insert sales_order_items
+        const orderItemRows = [];
+        for (const o of ordersData) {
+            for (const it of o.items) {
+                orderItemRows.push({ order_dbId: o.dbId, product_id: it.product_id, quantity: it.quantity, unit_price: it.unit_price });
             }
         }
-        console.log(`   ✓ Sales orders: ${orderIds.length} don, ${orderIds.reduce((s, o) => s + o.items.length, 0)} items`);
+        const ITEM_BATCH2 = 500;
+        let orderItemCount = 0;
+        for (let i = 0; i < orderItemRows.length; i += ITEM_BATCH2) {
+            const chunk = orderItemRows.slice(i, i + ITEM_BATCH2);
+            const valuesSql = [];
+            const params = [];
+            chunk.forEach((it, ri) => {
+                const base = ri * 4;
+                valuesSql.push(`($${base+1},$${base+2},$${base+3},$${base+4})`);
+                params.push(it.order_dbId, it.product_id, it.quantity, it.unit_price);
+            });
+            await client.query(
+                `INSERT INTO sales_order_items (order_id, product_id, quantity, unit_price) VALUES ${valuesSql.join(', ')}`,
+                params
+            );
+            orderItemCount += chunk.length;
+        }
+        console.log(`   ✓ Sales orders: ${orderIds.length} don, ${orderItemCount} items`);
 
         // ----- 4c) STOCK_OUTBOUND_NOTES (xuất kho cho đơn đã shipping/completed/returned) -----
+        // Chuẩn bị data
+        const outboundable = orderIds.filter(o => ['shipping', 'completed', 'returned'].includes(o.status));
+        const outboundList = [];
+        outboundable.forEach((o, idx) => {
+            outboundList.push({
+                num: idx + 1,
+                ono: `PXK-2026-${String(idx + 1).padStart(4, '0')}`,
+                order: o,
+                whId: WAREHOUSE_IDS[0],
+                exportDate: new Date(o.date.getTime() + rand(1, 3) * 24 * 60 * 60 * 1000),
+            });
+        });
+        // Batch insert stock_outbound_notes
+        const OB_BATCH = 100;
+        const OB_COLS = 6; // 6 params per row: outbound_no, order_id, warehouse_id, export_date, created_by, note  (status='completed' literal)
         let outboundCount = 0;
-        let outboundItemCount = 0;
-        for (const o of orderIds) {
-            if (!['shipping', 'completed', 'returned'].includes(o.status)) continue;
-            const num = outboundCount + 1;
-            const ono = `PXK-2026-${String(num).padStart(4, '0')}`;
-            const whId = WAREHOUSE_IDS[0]; // xuất từ kho chính
-            const exportDate = new Date(o.date.getTime() + rand(1, 3) * 24 * 60 * 60 * 1000);
+        const outboundNoToId = {};
+        for (let i = 0; i < outboundList.length; i += OB_BATCH) {
+            const chunk = outboundList.slice(i, i + OB_BATCH);
+            const rowsSql = [];
+            for (let ri = 0; ri < chunk.length; ri++) {
+                const base = ri * OB_COLS;
+                rowsSql.push(`($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},'completed',$${base+6})`);
+            }
+            const params = [];
+            chunk.forEach((ob) => {
+                params.push(ob.ono, ob.order.id, ob.whId, fmtDate(ob.exportDate), USER_IDS.warehouse, `Xuat kho cho don ${ob.order.no}`);
+            });
             const ins = await client.query(
                 `INSERT INTO stock_outbound_notes (outbound_no, order_id, warehouse_id, export_date, created_by, status, note)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-                [ono, o.id, whId, fmtDate(exportDate), USER_IDS.warehouse, 'completed', `Xuat kho cho don ${o.no}`]
+                 VALUES ${rowsSql.join(', ')} RETURNING id, outbound_no`,
+                params
             );
-            const outboundId = ins.rows[0].id;
+            const noToId = {};
+            ins.rows.forEach(r => { noToId[r.outbound_no] = r.id; });
+            chunk.forEach(ob => { ob.dbId = noToId[ob.ono]; outboundNoToId[ob.ono] = ob.dbId; });
+            outboundCount += chunk.length;
+            if (i % 500 === 0) console.log(`     outbounds inserted: ${outboundCount}/${outboundList.length}`);
+        }
+        // Batch insert auto_codes for outbounds
+        await client.query(
+            `INSERT INTO auto_codes (code, prefix, year)
+             SELECT unnest($1::text[]), 'PXK', 2026 ON CONFLICT DO NOTHING`,
+            [outboundList.map(ob => ob.ono)]
+        );
+        // Build out_items
+        const outboundItemsAll = [];
+        outboundList.forEach(ob => {
+            ob.order.items.forEach(it => {
+                outboundItemsAll.push({ outbound_dbId: ob.dbId, product_id: it.product_id, quantity: it.quantity });
+            });
+        });
+        // Batch insert stock_outbound_note_items
+        const OB_ITEM_BATCH = 500;
+        let outboundItemCount = 0;
+        for (let i = 0; i < outboundItemsAll.length; i += OB_ITEM_BATCH) {
+            const chunk = outboundItemsAll.slice(i, i + OB_ITEM_BATCH);
+            const valuesSql = [];
+            const params = [];
+            chunk.forEach((it, ri) => {
+                const base = ri * 3;
+                valuesSql.push(`($${base+1},$${base+2},$${base+3})`);
+                params.push(it.outbound_dbId, it.product_id, it.quantity);
+            });
             await client.query(
-                `INSERT INTO auto_codes (code, prefix, year) VALUES ($1, 'PXK', 2026) ON CONFLICT DO NOTHING`,
-                [ono]
+                `INSERT INTO stock_outbound_note_items (outbound_note_id, product_id, quantity) VALUES ${valuesSql.join(', ')}`,
+                params
             );
-            for (const it of o.items) {
-                await client.query(
-                    `INSERT INTO stock_outbound_note_items (outbound_note_id, product_id, quantity) VALUES ($1, $2, $3)`,
-                    [outboundId, it.product_id, it.quantity]
-                );
-                // Trừ tồn
-                await client.query(
-                    `UPDATE inventory_balances SET on_hand_qty = GREATEST(0, on_hand_qty - $1), updated_at = CURRENT_TIMESTAMP
-                     WHERE product_id = $2 AND warehouse_id = $3`,
-                    [it.quantity, it.product_id, whId]
-                );
-                // Transaction
-                await client.query(
-                    `INSERT INTO inventory_transactions (warehouse_id, product_id, transaction_type, quantity, reference_type, reference_id, transaction_date, note)
-                     VALUES ($1, $2, 'outbound', $3, 'stock_outbound', $4, $5, $6)`,
-                    [whId, it.product_id, it.quantity, outboundId, fmtDate(exportDate), `Xuat kho cho don ${o.no}`]
-                );
-                outboundItemCount++;
+            outboundItemCount += chunk.length;
+        }
+        // Bulk UPDATE inventory_balances (outbound: subtract)
+        const outDelta = {};
+        outboundList.forEach(ob => {
+            ob.order.items.forEach(it => {
+                const k = `${ob.whId}|${it.product_id}`;
+                if (!outDelta[k]) outDelta[k] = { whId: ob.whId, product_id: it.product_id, qty: 0 };
+                outDelta[k].qty += it.quantity;
+            });
+        });
+        const outDeltaArr = Object.values(outDelta);
+        if (outDeltaArr.length) {
+            const cases = outDeltaArr.map((d, i) => {
+                const base = i * 3;
+                return `WHEN product_id=$${base+1} AND warehouse_id=$${base+2} THEN GREATEST(0, on_hand_qty - $${base+3})`;
+            }).join(' ');
+            const whens = outDeltaArr.map((d, i) => {
+                const base = i * 3;
+                return `(product_id=$${base+1} AND warehouse_id=$${base+2})`;
+            }).join(' OR ');
+            const uParams = outDeltaArr.flatMap(d => [d.product_id, d.whId, d.qty]);
+            await client.query(
+                `UPDATE inventory_balances SET on_hand_qty = CASE ${cases} END, updated_at = CURRENT_TIMESTAMP WHERE ${whens}`,
+                uParams
+            );
+        }
+        // Batch insert inventory_transactions outbound
+        // Schema: warehouse_id, product_id, transaction_type, quantity, reference_type, reference_id, transaction_date
+        const outTxnValues = [];
+        const outTxnParams = [];
+        outboundList.forEach(ob => {
+            ob.order.items.forEach((it) => {
+                const base = outTxnParams.length;
+                outTxnValues.push(`($${base+1},$${base+2},'outbound',$${base+3},'stock_outbound',$${base+4},CURRENT_TIMESTAMP)`);
+                outTxnParams.push(ob.whId, it.product_id, it.quantity, ob.dbId);
+            });
+        });
+        const TXN_BATCH2 = 100;
+        const TXN_COLS2 = 4; // whId, product_id, qty, ref_id  (literals + CURRENT_TIMESTAMP)
+        for (let i = 0; i < outTxnValues.length; i += TXN_BATCH2) {
+            const chunkRows = Math.min(TXN_BATCH2, outTxnValues.length - i);
+            const rowsSql = [];
+            for (let r = 0; r < chunkRows; r++) {
+                const b = r * TXN_COLS2;
+                rowsSql.push(`($${b + 1}, $${b + 2}, 'outbound', $${b + 3}, 'stock_outbound', $${b + 4}, CURRENT_TIMESTAMP)`);
             }
-            outboundCount++;
+            const sliceStart = i * TXN_COLS2;
+            const sliceEnd = (i + chunkRows) * TXN_COLS2;
+            const chunkParams = outTxnParams.slice(sliceStart, sliceEnd);
+            await client.query(
+                `INSERT INTO inventory_transactions (warehouse_id, product_id, transaction_type, quantity, reference_type, reference_id, transaction_date)
+                 VALUES ${rowsSql.join(', ')}`,
+                chunkParams
+            );
         }
         console.log(`   ✓ Outbounds: ${outboundCount} phieu, ${outboundItemCount} items`);
 
         // ----- 4d) SHIPPING_ORDERS (vận chuyển cho đơn shipping/completed) -----
-        let shippingCount = 0;
+        const shipList = [];
         const carrierCounters = {};
         for (const o of orderIds) {
             if (!['shipping', 'completed', 'returned'].includes(o.status)) continue;
@@ -424,45 +682,111 @@ async function main() {
             const deliveredAt = status === 'delivered'
                 ? new Date(shippedAt.getTime() + rand(1, 72) * 3600000)
                 : null;
+            shipList.push({
+                order_id: o.id, carrier_code: carrier.code, carrier_name: carrier.name,
+                tracking_no: tno, shipping_fee: carrier.fee, status,
+                assigned_at: fmtDate(assignedAt), shipped_at: fmtDate(shippedAt),
+                delivered_at: deliveredAt ? fmtDate(deliveredAt) : null,
+            });
+        }
+        // Batch insert shipping_orders
+        let shippingCount = 0;
+        const SHIP_BATCH = 200;
+        for (let i = 0; i < shipList.length; i += SHIP_BATCH) {
+            const chunk = shipList.slice(i, i + SHIP_BATCH);
+            const valuesSql = [];
+            const params = [];
+            chunk.forEach((s, ri) => {
+                const base = ri * 9;
+                valuesSql.push(`($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9})`);
+                params.push(s.order_id, s.carrier_code, s.carrier_name, s.tracking_no,
+                    s.shipping_fee, s.status, s.assigned_at, s.shipped_at, s.delivered_at);
+            });
             await client.query(
                 `INSERT INTO shipping_orders (order_id, carrier_code, carrier_name, tracking_no, shipping_fee, status, assigned_at, shipped_at, delivered_at)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-                [o.id, carrier.code, carrier.name, tno, carrier.fee, status, fmtDate(assignedAt), fmtDate(shippedAt), deliveredAt ? fmtDate(deliveredAt) : null]
+                 VALUES ${valuesSql.join(', ')}`,
+                params
             );
+            shippingCount += chunk.length;
+        }
+        // Batch insert auto_codes for shippings
+        const codesByCarrier = {};
+        shipList.forEach(s => {
+            if (!codesByCarrier[s.carrier_code]) codesByCarrier[s.carrier_code] = [];
+            codesByCarrier[s.carrier_code].push(s.tracking_no);
+        });
+        for (const [carrier, codes] of Object.entries(codesByCarrier)) {
             await client.query(
-                `INSERT INTO auto_codes (code, prefix, year) VALUES ($1, $2, 2026) ON CONFLICT DO NOTHING`,
-                [tno, carrier.code]
+                `INSERT INTO auto_codes (code, prefix, year)
+                 SELECT unnest($1::text[]), $2, 2026 ON CONFLICT DO NOTHING`,
+                [codes, carrier]
             );
-            shippingCount++;
         }
         console.log(`   ✓ Shipping orders: ${shippingCount} van chuyen`);
 
         // ----- 4e) RETURN_REQUESTS + ITEMS (cho đơn returned) -----
+        const returnList = [];
+        const returnItemsAll = [];
+        const returnedOrders = orderIds.filter(o => o.status === 'returned');
         let returnCount = 0;
-        for (const o of orderIds) {
-            if (o.status !== 'returned') continue;
-            const rrIns = await client.query(
-                `INSERT INTO return_requests (order_id, customer_reject_reason, complaint_source, logistics_action, status, created_at)
-                 VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-                [o.id, weightedPick(['khong_nhan_hang', 'sai_hang', 'hong_vo', 'khong_dung_mo_ta']),
-                 weightedPick(['after_delivery', 'during_delivery']),
-                 weightedPick(['return_to_warehouse', 'exchange', 'refund']),
-                 weightedPick(['pending', 'processing', 'resolved', 'closed']),
-                 fmtDate(o.actualDelivery || o.date)]
-            );
-            const rrId = rrIns.rows[0].id;
-            // 1-2 items returned
+        for (const o of returnedOrders) {
+            const reason = weightedPick(['khong_nhan_hang', 'sai_hang', 'hong_vo', 'khong_dung_mo_ta']);
+            const source = weightedPick(['after_delivery', 'during_delivery']);
+            const action = weightedPick(['return_to_warehouse', 'exchange', 'refund']);
+            const rrstatus = weightedPick(['pending', 'processing', 'resolved', 'closed']);
+            const createdAt = fmtDate(o.actualDelivery || o.date);
+            returnList.push({ order: o, reason, source, action, rrstatus, createdAt });
+
             const returnItems = o.items.slice(0, rand(1, Math.min(2, o.items.length)));
-            for (const it of returnItems) {
+            returnItems.forEach(it => {
                 const qty = Math.min(it.quantity, rand(1, it.quantity));
-                await client.query(
-                    `INSERT INTO return_items (return_id, product_id, quantity, is_defective) VALUES ($1, $2, $3, $4)`,
-                    [rrId, it.product_id, qty, Math.random() < 0.4]
-                );
-            }
+                returnItemsAll.push({ return_ono: o.ono, product_id: it.product_id, quantity: qty, is_defective: Math.random() < 0.4 });
+            });
             returnCount++;
         }
-        console.log(`   ✓ Return requests: ${returnCount} phieu`);
+        // Batch insert return_requests
+        const returnIdByOno = {};
+        const RR_BATCH = 100;
+        for (let i = 0; i < returnList.length; i += RR_BATCH) {
+            const chunk = returnList.slice(i, i + RR_BATCH);
+            const valuesSql = [];
+            const params = [];
+            chunk.forEach((r, ri) => {
+                const base = ri * 6;
+                valuesSql.push(`($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6})`);
+                params.push(r.order.id, r.reason, r.source, r.action, r.rrstatus, r.createdAt);
+            });
+            const ins = await client.query(
+                `INSERT INTO return_requests (order_id, customer_reject_reason, complaint_source, logistics_action, status, created_at)
+                 VALUES ${valuesSql.join(', ')} RETURNING id, order_id`,
+                params
+            );
+            ins.rows.forEach(r => { returnIdByOno[chunk.find(c => c.order.id === r.order_id).order.ono] = r.id; });
+        }
+        // Replace o.ono key with real return_id
+        returnItemsAll.forEach(it => {
+            it.return_dbId = returnIdByOno[it.return_ono];
+            delete it.return_ono;
+        });
+        // Batch insert return_items
+        const RI_BATCH = 500;
+        let returnItemCount = 0;
+        for (let i = 0; i < returnItemsAll.length; i += RI_BATCH) {
+            const chunk = returnItemsAll.slice(i, i + RI_BATCH);
+            const valuesSql = [];
+            const params = [];
+            chunk.forEach((it, ri) => {
+                const base = ri * 4;
+                valuesSql.push(`($${base+1},$${base+2},$${base+3},$${base+4})`);
+                params.push(it.return_dbId, it.product_id, it.quantity, it.is_defective);
+            });
+            await client.query(
+                `INSERT INTO return_items (return_id, product_id, quantity, is_defective) VALUES ${valuesSql.join(', ')}`,
+                params
+            );
+            returnItemCount += chunk.length;
+        }
+        console.log(`   ✓ Return requests: ${returnCount} phieu, ${returnItemCount} items`);
 
         await client.query('COMMIT');
         console.log('\n========================================');

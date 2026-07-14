@@ -306,16 +306,6 @@ async function setup() {
             ['IPH-15P', 'iPhone 15 Pro Max 256GB', 'Chiec', 'Dien thoai', 29500000, 50],
             ['MON-LG27', 'Man hinh LG 27 inch 4K', 'Bo', 'Phu kien', 8500000, 50],
             ['KEY-MX', 'Ban phim co Logitech MX Mechanical', 'Cai', 'Phu kien', 3200000, 50],
-            ['SPH-A24', 'Samsung Galaxy A24 128GB', 'Chiec', 'Dien thoai', 7200000, 80],
-            ['SPH-XIA', 'Xiaomi Redmi Note 13 Pro', 'Chiec', 'Dien thoai', 6500000, 80],
-            ['TAB-S9F', 'Samsung Galaxy Tab S9 FE', 'Chiec', 'Tablet', 14500000, 30],
-            ['HDP-SONY', 'Tai nghe Sony WH-1000XM5', 'Chiec', 'Phu kien', 8900000, 40],
-            ['HDP-AIR', 'AirPods Pro 2 USB-C', 'Chiec', 'Phu kien', 6500000, 60],
-            ['CHU-MX', 'Chuot Logitech MX Master 3S', 'Chiec', 'Phu kien', 4200000, 70],
-            ['MON-DELL', 'Man hinh Dell 27 inch FHD', 'Bo', 'Phu kien', 7800000, 40],
-            ['LAP-HP', 'HP Pavilion 15 Ryzen 7', 'Cai', 'Laptop', 18500000, 30],
-            ['LAP-LEG', 'Lenovo IdeaPad Gaming 5', 'Cai', 'Laptop', 21000000, 25],
-            ['SPH-VIV', 'Vivo V30e 5G', 'Chiec', 'Dien thoai', 9800000, 50],
         ];
         for (const [sku, name, unit, cat, price, min] of products) {
             await client.query(`INSERT INTO products (sku, name, unit, category, sale_price, min_stock)
@@ -329,14 +319,6 @@ async function setup() {
             ['KH-FPT', 'FPT Retail', '18006601', '261 Khanh Hoi, Quan 4, TPHCM', 'Chi Mai (Quan ly chuoi)', 2],
             ['KH-PV', 'Phong Vu Computer', '18006867', '214 Quan Thanh, Ba Dinh, Ha Noi', 'Anh Nam (Giam doc kinh doanh)', 2],
             ['KH-CELL', 'CellphoneS', '18002097', '115 Thai Ha, Dong Da, Ha Noi', 'Chi Linh (Truong phong cung ung)', 2],
-            ['KH-HNDM', 'Hoang Ha Mobile', '19001071', '123 Le Dai Hanh, Quan 11, TPHCM', 'Anh Tuan (Giam doc chien luoc)', 2],
-            ['KH-MRT', 'Mai Rong Tay Media', '02838123456', '45 Nguyen Hue, Quan 1, TPHCM', 'Chi Ngoc (Truong phong IT)', 2],
-            ['KH-TIKI', 'Tiki Trading', '19006034', 'L2-03, Etown 3, Quan Tan Binh, TPHCM', 'Anh Duc (Procurement Lead)', 2],
-            ['KH-SHOP', 'Shopee Express', '0909123456', 'Khu logistics Binh Chanh, TPHCM', 'Chi Lien (Quan ly kho)', 2],
-            ['KH-LAZA', 'Lazada Vietnam', '18001234', 'Saigon Centre, Quan 1, TPHCM', 'Anh Phuc (Operations Manager)', 2],
-            ['KH-BACH', 'Bach Hoa Xanh', '18006888', 'KCN Tan Binh, TPHCM', 'Chi Ha (Giam doc mua hang)', 2],
-            ['KH-WINM', 'Walmart Minh', '0938123456', '54 Pho Cuong, Quan 2, Ha Noi', 'Anh Son (Chief Buyer)', 2],
-            ['KH-ELAND', 'E-Land VN', '02862999999', 'Nam Ky Khoi Nghia, Quan 3, TPHCM', 'Chi Oanh (Sales Director)', 2],
         ];
         for (const [code, company, phone, addr, contact, createdBy] of customers) {
             await client.query(`INSERT INTO customers (customer_code, company_name, phone, address, contact_person, created_by)
