@@ -328,7 +328,7 @@ const confirmDelivery = async (req, res) => {
     try {
         const orderId = req.params.id;
         await db.run(
-            `UPDATE sales_orders SET status = 'completed', actual_delivery_date = CURRENT_DATE, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+            `UPDATE sales_orders SET status = 'completed', actual_delivery_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh')::date, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
             [orderId]
         );
         res.status(200).json({ message: 'Xac nhan don hang da giao thanh cong!' });

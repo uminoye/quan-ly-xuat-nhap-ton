@@ -6,13 +6,13 @@ const toNumber = (value) => Number(value || 0);
 const buildDateFilter = (period) => {
     switch (period) {
         case 'day':
-            return { label: 'Hôm nay', sql: "created_at BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '1 day' - INTERVAL '1 second'" };
+            return { label: 'Hôm nay', sql: "created_at BETWEEN (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh')::date AND (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh')::date + INTERVAL '1 day' - INTERVAL '1 second'" };
         case 'week':
-            return { label: 'Tuần này', sql: "created_at BETWEEN DATE_TRUNC('week', CURRENT_DATE) AND DATE_TRUNC('week', CURRENT_DATE) + INTERVAL '1 week' - INTERVAL '1 second'" };
+            return { label: 'Tuần này', sql: "created_at BETWEEN DATE_TRUNC('week', (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh')::date) AND DATE_TRUNC('week', (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh')::date) + INTERVAL '1 week' - INTERVAL '1 second'" };
         case 'month':
-            return { label: 'Tháng này', sql: "created_at BETWEEN DATE_TRUNC('month', CURRENT_DATE) AND DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month' - INTERVAL '1 second'" };
+            return { label: 'Tháng này', sql: "created_at BETWEEN DATE_TRUNC('month', (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh')::date) AND DATE_TRUNC('month', (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh')::date) + INTERVAL '1 month' - INTERVAL '1 second'" };
         case 'quarter':
-            return { label: 'Quý này', sql: "created_at BETWEEN DATE_TRUNC('quarter', CURRENT_DATE) AND DATE_TRUNC('quarter', CURRENT_DATE) + INTERVAL '3 months' - INTERVAL '1 second'" };
+            return { label: 'Quý này', sql: "created_at BETWEEN DATE_TRUNC('quarter', (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh')::date) AND DATE_TRUNC('quarter', (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh')::date) + INTERVAL '3 months' - INTERVAL '1 second'" };
         default:
             return { label: 'Tất cả', sql: null };
     }
@@ -97,7 +97,7 @@ const getAdminDashboard = async (req, res) => {
                 JOIN sales_order_items oi ON oi.order_id = o.id
                 LEFT JOIN products p ON p.id = oi.product_id
                 WHERE o.status = 'completed'
-                  AND ${orderDateCol} >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '11 months'
+                  AND ${orderDateCol} >= DATE_TRUNC('month', (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh')::date) - INTERVAL '11 months'
                   ${orderDateSql}
                 GROUP BY ${revenueMonthGroup}
                 ORDER BY period ASC

@@ -372,7 +372,7 @@ const processCompensation = async (req, res) => {
         const receipt_no = await generateCode('receipt');
         await client.query(`
             INSERT INTO production_receipts (receipt_no, warehouse_id, receipt_date, note, status, created_at, updated_at)
-            VALUES ($1, $2, CURRENT_DATE, $3, 'completed', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            VALUES ($1, $2, (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh')::date, $3, 'completed', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         `, [receipt_no, warehouseId, `Bu hang tu phieu bu ${comp.compensation_no} — don ${comp.order_id}`]);
 
         const receiptDb = await client.query(`SELECT id FROM production_receipts WHERE receipt_no = $1`, [receipt_no]);
