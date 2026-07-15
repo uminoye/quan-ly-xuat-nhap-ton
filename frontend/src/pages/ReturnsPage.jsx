@@ -11,9 +11,9 @@ const ACTION_OUTCOMES = {
   loi_nha_may: {
     icon: 'ri-error-warning-line',
     iconBg: '#fee2e2', iconColor: '#991b1b',
-    headline: 'Kho lỗi + Phiếu bù nhà máy',
-    detail: 'Hàng đưa vào kho lỗi. Phiếu bù sẽ gửi nhà máy để xác nhận bù hàng.',
-    note: 'Hàng lỗi → Kho lỗi → Phiếu bù → Nhà máy xác nhận bù',
+    headline: 'Quản lý Hàng hoàn / Kho lỗi',
+    detail: 'Danh sách các đơn hàng bị hoàn trả hoặc có lỗi phát sinh trong và sau quá trình giao hàng.',
+    note: 'Hàng lỗi/hoàn → Xử lý phân loại',
     badge: { bg: '#fee2e2', color: '#991b1b' },
   },
   loi_van_tai: {
@@ -127,12 +127,8 @@ export default function ReturnsPage() {
 
   const fetchData = async () => {
     try {
-      const [retRes, compRes] = await Promise.all([
-        api.get(`/returns?period=${period}`),
-        api.get(`/returns/compensations?period=${period}`),
-      ]);
+      const retRes = await api.get(`/returns?period=${period}`);
       setReturns(Array.isArray(retRes.data) ? retRes.data : []);
-      setCompensations(Array.isArray(compRes.data) ? compRes.data : []);
     } catch (err) {
       console.error('Lỗi tải dữ liệu Returns:', err);
     } finally {
@@ -560,33 +556,13 @@ export default function ReturnsPage() {
           </div>
         </div>
 
-        {/* Tabs */}
-        <div style={{ display: 'flex', gap: '0', marginBottom: '22px', background: '#f1f5f9', borderRadius: '16px', padding: '4px', border: '1px solid #e2e8f0' }}>
-          <button onClick={() => setActiveTab('returns')}
-            style={{ flex: 1, padding: '11px 24px', borderRadius: '12px', border: 'none',
-              background: activeTab === 'returns' ? '#fff' : 'transparent', color: activeTab === 'returns' ? '#2563eb' : '#64748b',
-              fontWeight: activeTab === 'returns' ? 800 : 600, fontSize: '14px', cursor: 'pointer',
-              boxShadow: activeTab === 'returns' ? '0 2px 8px rgba(37,99,235,0.12)' : 'none',
-              transition: 'all 200ms ease' }}>
-            <i className="ri-arrow-go-back-line" style={{ marginRight: '8px' }} />
-            Hàng hoàn / lỗi ({returns.length})
-          </button>
-          <button onClick={() => setActiveTab('compensations')}
-            style={{ flex: 1, padding: '11px 24px', borderRadius: '12px', border: 'none',
-              background: activeTab === 'compensations' ? '#fff' : 'transparent', color: activeTab === 'compensations' ? '#2563eb' : '#64748b',
-              fontWeight: activeTab === 'compensations' ? 800 : 600, fontSize: '14px', cursor: 'pointer',
-              boxShadow: activeTab === 'compensations' ? '0 2px 8px rgba(37,99,235,0.12)' : 'none',
-              transition: 'all 200ms ease' }}>
-            <i className="ri-file-list-3-line" style={{ marginRight: '8px' }} />
-            Phiếu bù nhà máy ({pendingComps.length > 0 ? `${pendingComps.length} chờ` : compensations.length})
-          </button>
-        </div>
+        {/* Tabs - Removed */}
 
         {/* Main Section */}
         <div style={PAGE_STYLES.section}>
           <div style={PAGE_STYLES.sectionHeader}>
             <h3 style={PAGE_STYLES.sectionTitle}>
-              {activeTab === 'returns' ? 'Danh sách hàng hoàn / lỗi' : 'Danh sách phiếu bù nhà máy'}
+              Danh sách hàng hoàn / lỗi
             </h3>
           </div>
 
@@ -594,31 +570,20 @@ export default function ReturnsPage() {
           <div style={{ padding: '16px 24px 0', display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
             <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Tìm theo mã đơn, khách hàng..."
               style={{ ...PAGE_STYLES.input, borderRadius: '14px', flex: 1, minWidth: 200 }} />
-            {activeTab === 'returns' ? (
-              <>
-                <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}
-                  style={{ ...PAGE_STYLES.input, borderRadius: '14px', minWidth: 180 }}>
-                  <option value="">Tất cả nguồn</option>
-                  <option value="during_delivery">Trong quá trình giao</option>
-                  <option value="after_delivery">Sau khi giao thành công</option>
-                </select>
-                <select value={returnStatusFilter} onChange={(e) => setReturnStatusFilter(e.target.value)}
-                  style={{ ...PAGE_STYLES.input, borderRadius: '14px', minWidth: 180 }}>
-                  <option value="">Tất cả trạng thái</option>
-                  <option value="return_pending">Chờ xử lý</option>
-                  <option value="logistics_handled">Đã chọn hướng</option>
-                  <option value="return_completed">Đã xử lý xong</option>
-                  <option value="return_to_sales">Về Sales</option>
-                </select>
-              </>
-            ) : (
-              <select value={compFilter} onChange={(e) => setCompFilter(e.target.value)}
-                style={{ ...PAGE_STYLES.input, borderRadius: '14px', minWidth: 180 }}>
-                <option value="">Tất cả trạng thái</option>
-                <option value="pending">Chờ xác nhận</option>
-                <option value="approved">Đã đồng ý</option>
-              </select>
-            )}
+            <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}
+              style={{ ...PAGE_STYLES.input, borderRadius: '14px', minWidth: 180 }}>
+              <option value="">Tất cả nguồn</option>
+              <option value="during_delivery">Trong quá trình giao</option>
+              <option value="after_delivery">Sau khi giao thành công</option>
+            </select>
+            <select value={returnStatusFilter} onChange={(e) => setReturnStatusFilter(e.target.value)}
+              style={{ ...PAGE_STYLES.input, borderRadius: '14px', minWidth: 180 }}>
+              <option value="">Tất cả trạng thái</option>
+              <option value="return_pending">Chờ xử lý</option>
+              <option value="logistics_handled">Đã chọn hướng</option>
+              <option value="return_completed">Đã xử lý xong</option>
+              <option value="return_to_sales">Về Sales</option>
+            </select>
           </div>
 
           <div style={PAGE_STYLES.tableWrap}>
@@ -628,87 +593,47 @@ export default function ReturnsPage() {
               <table style={PAGE_STYLES.table}>
                 <thead>
                   <tr>
-                    {activeTab === 'returns' ? (
-                      <>
-                        <th style={PAGE_STYLES.th}>Mã đơn</th>
-                        <th style={PAGE_STYLES.th}>Khách hàng</th>
-                        <th style={PAGE_STYLES.th}>Nguồn</th>
-                        <th style={PAGE_STYLES.th}>Hướng xử lý</th>
-                        <th style={PAGE_STYLES.th}>Trạng thái</th>
-                        <th style={PAGE_STYLES.th}>Hành động</th>
-                      </>
-                    ) : (
-                      <>
-                        <th style={PAGE_STYLES.th}>Mã phiếu bù</th>
-                        <th style={PAGE_STYLES.th}>Mã đơn</th>
-                        <th style={PAGE_STYLES.th}>Khách hàng</th>
-                        <th style={PAGE_STYLES.th}>Loại lỗi</th>
-                        <th style={PAGE_STYLES.th}>Trạng thái</th>
-                        <th style={PAGE_STYLES.th}>Hành động</th>
-                      </>
-                    )}
+                    <th style={PAGE_STYLES.th}>Mã đơn</th>
+                    <th style={PAGE_STYLES.th}>Khách hàng</th>
+                    <th style={PAGE_STYLES.th}>Nguồn</th>
+                    <th style={PAGE_STYLES.th}>Hướng xử lý</th>
+                    <th style={PAGE_STYLES.th}>Trạng thái</th>
+                    <th style={PAGE_STYLES.th}>Hành động</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {activeTab === 'returns' ? (
-                    filteredReturns.length === 0 ? (
-                      <tr><td colSpan="6" style={{ ...PAGE_STYLES.td, textAlign: 'center', color: '#94a3b8', padding: '36px' }}>Chưa có yêu cầu hoàn hàng nào.</td></tr>
-                    ) : filteredReturns.map((ret) => (
-                      <tr key={ret.id}>
-                        <td style={{ ...PAGE_STYLES.td, borderTopLeftRadius: '18px', borderBottomLeftRadius: '18px' }}>
-                          <div style={{ fontWeight: 900, color: '#1d4ed8' }}>{ret.order_no}</div>
-                        </td>
-                        <td style={PAGE_STYLES.td}><div style={{ fontWeight: 700 }}>{ret.customer_name || '—'}</div></td>
-                        <td style={PAGE_STYLES.td}>
-                          <span style={{ ...PAGE_STYLES.badge, background: ret.complaint_source === 'after_delivery' ? '#ede9fe' : '#fef3c7', color: ret.complaint_source === 'after_delivery' ? '#6d28d9' : '#92400e' }}>
-                            {ret.complaint_source === 'after_delivery' ? 'Sau giao' : 'Trong giao'}
-                          </span>
-                        </td>
-                        <td style={PAGE_STYLES.td}>
-                          {ret.logistics_action ? getActionBadge(ret.logistics_action) : (
-                            <span style={{ ...PAGE_STYLES.badge, background: '#f1f5f9', color: '#94a3b8' }}>Chưa chọn</span>
-                          )}
-                        </td>
-                        <td style={PAGE_STYLES.td}>{getStatusBadge(ret.status)}</td>
-                        <td style={{ ...PAGE_STYLES.td, borderTopRightRadius: '18px', borderBottomRightRadius: '18px' }}>
-                          {ret.status === 'return_pending' && ret.logistics_action && canProcess ? (
-                            <button onClick={() => openProcessModal(ret)} style={{ ...actionBtn('#ef4444'), padding: '8px 14px' }}>
-                              <i className="ri-settings-3-line" style={{ marginRight: '6px' }} />Xử lý
-                            </button>
-                          ) : (
-                            <span style={{ color: '#94a3b8', fontSize: '13px' }}>
-                              {!canProcess ? 'Chỉ xem' : '—'}
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    filteredComps.length === 0 ? (
-                      <tr><td colSpan="6" style={{ ...PAGE_STYLES.td, textAlign: 'center', color: '#94a3b8', padding: '36px' }}>Chưa có phiếu bù nào.</td></tr>
-                    ) : filteredComps.map((comp) => (
-                      <tr key={comp.id}>
-                        <td style={{ ...PAGE_STYLES.td, borderTopLeftRadius: '18px', borderBottomLeftRadius: '18px' }}>
-                          <div style={{ fontWeight: 900, color: '#991b1b' }}>{comp.compensation_no}</div>
-                          <div style={{ fontSize: '11px', color: '#94a3b8' }}>{formatDate(comp.created_at)}</div>
-                        </td>
-                        <td style={PAGE_STYLES.td}><div style={{ fontWeight: 700, color: '#1d4ed8' }}>{comp.order_no || '—'}</div></td>
-                        <td style={PAGE_STYLES.td}><div style={{ fontWeight: 700 }}>{comp.customer_name || '—'}</div></td>
-                        <td style={PAGE_STYLES.td}>
-                          <span style={{ ...PAGE_STYLES.badge, background: comp.defect_type === 'loi_nha_may' ? '#fee2e2' : '#e0f2fe', color: comp.defect_type === 'loi_nha_may' ? '#991b1b' : '#0369a1' }}>
-                            {comp.defect_type === 'loi_nha_may' ? 'Lỗi nhà máy' : 'Lỗi vận chuyển'}
-                          </span>
-                        </td>
-                        <td style={PAGE_STYLES.td}>{getCompStatusBadge(comp.status)}</td>
-                        <td style={{ ...PAGE_STYLES.td, borderTopRightRadius: '18px', borderBottomRightRadius: '18px' }}>
-                          <button onClick={() => openCompModal(comp)} style={{ ...actionBtn('#6366f1'), padding: '8px 14px' }}>
-                            <i className="ri-eye-line" style={{ marginRight: '6px' }} />
-                            {canApproveCompensation(comp) ? 'Xem & Duyệt' : 'Xem'}
+                  {filteredReturns.length === 0 ? (
+                    <tr><td colSpan="6" style={{ ...PAGE_STYLES.td, textAlign: 'center', color: '#94a3b8', padding: '36px' }}>Chưa có yêu cầu hoàn hàng nào.</td></tr>
+                  ) : filteredReturns.map((ret) => (
+                    <tr key={ret.id}>
+                      <td style={{ ...PAGE_STYLES.td, borderTopLeftRadius: '18px', borderBottomLeftRadius: '18px' }}>
+                        <div style={{ fontWeight: 900, color: '#1d4ed8' }}>{ret.order_no}</div>
+                      </td>
+                      <td style={PAGE_STYLES.td}><div style={{ fontWeight: 700 }}>{ret.customer_name || '—'}</div></td>
+                      <td style={PAGE_STYLES.td}>
+                        <span style={{ ...PAGE_STYLES.badge, background: ret.complaint_source === 'after_delivery' ? '#ede9fe' : '#fef3c7', color: ret.complaint_source === 'after_delivery' ? '#6d28d9' : '#92400e' }}>
+                          {ret.complaint_source === 'after_delivery' ? 'Sau giao' : 'Trong giao'}
+                        </span>
+                      </td>
+                      <td style={PAGE_STYLES.td}>
+                        {ret.logistics_action ? getActionBadge(ret.logistics_action) : (
+                          <span style={{ ...PAGE_STYLES.badge, background: '#f1f5f9', color: '#94a3b8' }}>Chưa chọn</span>
+                        )}
+                      </td>
+                      <td style={PAGE_STYLES.td}>{getStatusBadge(ret.status)}</td>
+                      <td style={{ ...PAGE_STYLES.td, borderTopRightRadius: '18px', borderBottomRightRadius: '18px' }}>
+                        {ret.status === 'return_pending' && ret.logistics_action && canProcess ? (
+                          <button onClick={() => openProcessModal(ret)} style={{ ...actionBtn('#ef4444'), padding: '8px 14px' }}>
+                            <i className="ri-settings-3-line" style={{ marginRight: '6px' }} />Xử lý
                           </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
+                        ) : (
+                          <span style={{ color: '#94a3b8', fontSize: '13px' }}>
+                            {!canProcess ? 'Chỉ xem' : '—'}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             )}
