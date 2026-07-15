@@ -75,6 +75,7 @@ export default function ReturnsPage() {
   const [period, setPeriod] = useState('month');
   const [searchTerm, setSearchTerm] = useState('');
   const [sourceFilter, setSourceFilter] = useState(''); // '' | 'during_delivery' | 'after_delivery'
+  const [returnStatusFilter, setReturnStatusFilter] = useState('');
   const [compFilter, setCompFilter] = useState(''); // '' | 'pending' | 'approved'
 
   // Modals
@@ -163,6 +164,9 @@ export default function ReturnsPage() {
   }).filter((r) => {
     if (!sourceFilter) return true;
     return r.complaint_source === sourceFilter;
+  }).filter((r) => {
+    if (!returnStatusFilter) return true;
+    return r.status === returnStatusFilter;
   });
 
   const filteredComps = compensations.filter((c) => {
@@ -591,12 +595,22 @@ export default function ReturnsPage() {
             <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Tìm theo mã đơn, khách hàng..."
               style={{ ...PAGE_STYLES.input, borderRadius: '14px', flex: 1, minWidth: 200 }} />
             {activeTab === 'returns' ? (
-              <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}
-                style={{ ...PAGE_STYLES.input, borderRadius: '14px', minWidth: 180 }}>
-                <option value="">Tất cả nguồn</option>
-                <option value="during_delivery">Trong quá trình giao</option>
-                <option value="after_delivery">Sau khi giao thành công</option>
-              </select>
+              <>
+                <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}
+                  style={{ ...PAGE_STYLES.input, borderRadius: '14px', minWidth: 180 }}>
+                  <option value="">Tất cả nguồn</option>
+                  <option value="during_delivery">Trong quá trình giao</option>
+                  <option value="after_delivery">Sau khi giao thành công</option>
+                </select>
+                <select value={returnStatusFilter} onChange={(e) => setReturnStatusFilter(e.target.value)}
+                  style={{ ...PAGE_STYLES.input, borderRadius: '14px', minWidth: 180 }}>
+                  <option value="">Tất cả trạng thái</option>
+                  <option value="return_pending">Chờ xử lý</option>
+                  <option value="logistics_handled">Đã chọn hướng</option>
+                  <option value="return_completed">Đã xử lý xong</option>
+                  <option value="return_to_sales">Về Sales</option>
+                </select>
+              </>
             ) : (
               <select value={compFilter} onChange={(e) => setCompFilter(e.target.value)}
                 style={{ ...PAGE_STYLES.input, borderRadius: '14px', minWidth: 180 }}>
