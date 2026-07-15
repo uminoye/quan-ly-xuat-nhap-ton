@@ -613,35 +613,31 @@ export default function LogisticsPage() {
           <button onClick={closeCustomerRejectModal} style={{ ...pageStyles.actionButton, ...pageStyles.neutralButton, padding: '10px 12px' }}>Đóng</button>
         </div>
 
-        <form onSubmit={(e) => {
-          e.preventDefault();
-          // Gửi về Sales — không cần logistics_action
-          api.put(`/orders/${customerRejectOrder.id}/return-to-sales`, {
-            note: logisticsActionNote,
-          }).then(() => {
-            alert('Da gui don ve Sales xu ly!');
-            closeCustomerRejectModal();
-            fetchData();
-          }).catch(err => {
-            alert('Loi: ' + (err.response?.data?.message || err.message));
-          });
-        }}>
+        <form onSubmit={handleProcessCustomerRejection}>
           <div style={{ padding: '14px 16px', borderRadius: '16px', background: '#fee2e2', border: '1px solid #fca5a5', marginBottom: '18px' }}>
             <div style={{ fontSize: '12px', color: '#991b1b', fontWeight: 800, textTransform: 'uppercase', marginBottom: '6px' }}>Lý do khách từ chối</div>
-            <div style={{ fontWeight: 900, color: '#b91c1c', fontSize: '16px' }}>Không nhận hàng</div>
+            <div style={{ fontWeight: 900, color: '#b91c1c', fontSize: '16px' }}>Không nhận hàng / Khiếu nại</div>
           </div>
 
           <div style={{ display: 'grid', gap: '14px' }}>
             <div>
+              <label style={{ display: 'block', fontWeight: 800, marginBottom: '8px', color: '#334155' }}>Hướng xử lý (Logistics)</label>
+              <select value={logisticsAction} onChange={(e) => setLogisticsAction(e.target.value)} style={{ ...pageStyles.input, borderColor: '#cbd5e1' }}>
+                <option value="khong_nhan_hang">Khách không nhận hàng (Hoàn về kho gốc)</option>
+                <option value="loi_nha_may">Lỗi do nhà máy (Tạo phiếu bù)</option>
+                <option value="loi_van_tai">Lỗi do vận chuyển (Tự chịu thiệt hại)</option>
+              </select>
+            </div>
+            <div>
               <label style={{ display: 'block', fontWeight: 800, marginBottom: '8px' }}>Ghi chú</label>
-              <textarea rows="3" placeholder="VD: Khách báo không đặt hàng, địa chỉ sai..." value={logisticsActionNote} onChange={(e) => setLogisticsActionNote(e.target.value)} style={pageStyles.textarea} />
+              <textarea rows="3" placeholder="VD: Khách báo không đặt hàng, hàng móp méo..." value={logisticsActionNote} onChange={(e) => setLogisticsActionNote(e.target.value)} style={pageStyles.textarea} />
             </div>
             <div style={{ padding: '12px 14px', borderRadius: '14px', background: '#fef9c3', border: '1px solid #fde047', fontSize: '13px', color: '#92400e' }}>
-              → Hàng sẽ được gửi về <strong>Sales</strong> xử lý. Sales có thể sửa đơn, giao lại hoặc hủy đơn.
+              → Đơn sẽ được chuyển đến <strong>Kho hoàn / Kho lỗi</strong> để bộ phận xử lý tiếp tục.
             </div>
             <div style={{ display: 'flex', gap: '10px' }}>
               <button type="submit" style={{ ...pageStyles.actionButton, ...pageStyles.dangerButton, flex: 1, padding: '14px 16px' }}>
-                <i className="ri-send-plane-line" style={{ marginRight: '8px' }} />Gửi về Sales
+                <i className="ri-send-plane-line" style={{ marginRight: '8px' }} />Chuyển kho hoàn lỗi
               </button>
               <button type="button" onClick={closeCustomerRejectModal} style={{ ...pageStyles.actionButton, ...pageStyles.neutralButton, flex: 1, padding: '14px 16px' }}>Hủy</button>
             </div>

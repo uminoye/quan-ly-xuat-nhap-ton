@@ -328,11 +328,10 @@ const simulateAllShipping = async (req, res) => {
 };
 
 const processCustomerRejection = async (req, res) => {
-  // Chỉ xử lý KHÔNG NHẬN HÀNG (trong quá trình giao)
-  // → gửi về Sales quyết định
+  // Xử lý KHÔNG NHẬN HÀNG hoặc HÀNG LỖI (trong quá trình giao)
   const client = await db.pool.connect();
   try {
-    const { order_id, logistics_note } = req.body;
+    const { order_id, logistics_note, logistics_action } = req.body;
     if (!order_id) {
       return res.status(400).json({ message: 'Thieu order_id' });
     }
@@ -344,34 +343,32 @@ const processCustomerRejection = async (req, res) => {
       [order_id]
     );
 
+    const complaintReason = logistics_action === 'khong_nhan_hang' ? 'khong_nhan_hang' : 'hang_loi';
+
     if (!existingRR.rows.length) {
       await client.query(
-        `INSERT INTO return_requests (order_id, customer_reject_reason, complaint_source, logistics_note, status)
-         VALUES ($1, 'khong_nhan_hang', 'during_delivery', $2, 'logistics_handled')`,
-        [order_id, logistics_note || 'Khach khong nhan hang trong qua trinh giao']
+        `INSERT INTO return_requests (order_id, customer_reject_reason, complaint_source, logistics_action, logistics_note, status)
+         VALUES ($1, $2, 'during_delivery', $3, $4, 'return_pending')`,
+        [order_id, complaintReason, logistics_action !== 'khong_nhan_hang' ? logistics_action : null, logistics_note || 'Khach khong nhan hang trong qua trinh giao']
       );
     } else {
       await client.query(
-        `UPDATE return_requests SET customer_reject_reason = 'khong_nhan_hang', complaint_source = 'during_delivery', logistics_note = $1, updated_at = CURRENT_TIMESTAMP
-         WHERE order_id = $2`,
-        [logistics_note || null, order_id]
+        `UPDATE return_requests SET customer_reject_reason = $1, complaint_source = 'during_delivery', logistics_action = $2, logistics_note = $3, status = 'return_pending', updated_at = CURRENT_TIMESTAMP
+         WHERE order_id = $4`,
+        [complaintReason, logistics_action !== 'khong_nhan_hang' ? logistics_action : null, logistics_note || null, order_id]
       );
     }
 
     await client.query(
-      `UPDATE sales_orders SET status = 'return_to_sales', updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
-      [order_id]
-    );
-    await client.query(
-      `UPDATE return_requests SET status = 'return_to_sales', updated_at = CURRENT_TIMESTAMP WHERE order_id = $1`,
+      `UPDATE sales_orders SET status = 'return_pending', updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
       [order_id]
     );
 
     await client.query('COMMIT');
     res.status(200).json({
-      message: 'Da gui don ve Sales xu ly!',
-      logistics_action: 'khong_nhan_hang',
-      new_status: 'return_to_sales',
+      message: 'Da gui don ve kho xu ly hang hoan/loi!',
+      logistics_action: logistics_action,
+      new_status: 'return_pending',
     });
   } catch (err) {
     await client.query('ROLLBACK');
